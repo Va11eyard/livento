@@ -2,7 +2,7 @@
  * Livento shared contract.
  *
  * Every module (API routes, lib helpers, client pages) imports its types from
- * here so the three parallel workstreams stay compatible. Change a type only if
+ * here so API routes, helpers and screens stay compatible. Change a type only if
  * you update every caller in the same change.
  */
 
@@ -308,6 +308,28 @@ export interface LogRequest {
   action: InteractionAction;
 }
 
+// GET /api/health  (configuration only — never returns key values)
+export type IntegrationState = "live" | "sample" | "off" | "test" | "demo";
+export interface IntegrationStatus {
+  key: "events" | "ai" | "storage" | "telegram" | "email" | "payments" | "cron";
+  name: string;
+  state: IntegrationState;
+  detail: string;
+}
+export interface HealthResponse {
+  ok: true;
+  integrations: IntegrationStatus[];
+  deployment: {
+    environment: string; // "production" | "preview" | "development"
+    commit?: string; // short SHA
+    commitMessage?: string;
+    commitUrl?: string;
+    branch?: string;
+    region?: string;
+  };
+  checkedAt: string; // ISO datetime
+}
+
 // Error shape for every route
 export interface ApiError {
   error: string;
@@ -324,7 +346,7 @@ export interface City {
   lng: number;
 }
 
-// Local images for categories and sample events (produced by the landing/assets workstream)
+// Local images for categories and sample events (credits: public/assets/CREDITS.md)
 export const CATEGORY_IMAGES: Record<Category, string> = {
   music: "/assets/trail/concert.webp",
   festivals: "/assets/trail/festival.webp",

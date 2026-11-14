@@ -24,7 +24,7 @@ Owner: teammate (keys + deploy + bot). Everything here is configuration; no code
 ## 4. Upstash Redis (alert subscriptions, cache, logs)
 1. https://upstash.com → Create Database (Redis, regional, free) → REST API section.
 2. Env: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
-   (If you add Upstash through the Vercel Marketplace instead, the variable names may differ — tell the lead which names you got.)
+   (If you add Upstash through the Vercel Marketplace instead, the variable names may differ — tell the team which names you got.)
 
 ## 5. Email alerts (optional)
 1. https://resend.com → API Keys.
@@ -50,5 +50,5 @@ Owner: teammate (keys + deploy + bot). Everything here is configuration; no code
 - Discover → "Alerts on Telegram" → the bot confirms the subscription.
 - Vercel → Project → Logs: no errors from `/api/*`.
 
-## 10. Report to the lead
+## 10. Report back to the team
 Production URL, which variables are set, and any errors from Vercel logs.

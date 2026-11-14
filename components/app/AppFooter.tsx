@@ -25,6 +25,7 @@ export function AppFooter() {
             <Link href="/discover">Discover</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/onboarding">Edit profile</Link>
+            <Link href="/status">Status</Link>
             <ConfirmDialog
               triggerLabel="Clear my data"
               triggerClassName={styles.clear}

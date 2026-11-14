@@ -5,7 +5,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 /*
- * Hero pointer trail, ported from the Loop Dept reference (docs/reference/loop-dept/script.js).
+ * Hero pointer trail in the Loop Dept design-template style.
  * Stamps alternate between photos and animated loops, follow the pointer with a distance + time
  * throttle, keep at most 7 on screen, and fade out with the Web Animations API. Touch adds a stamp
  * per tap. "Play the trail" runs a fixed path. Reduced motion: static posters, no pointer trail.

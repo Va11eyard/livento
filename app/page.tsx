@@ -8,7 +8,7 @@ import { PRICING } from "@/lib/types";
 import "./landing.css";
 
 /*
- * Landing page: the Loop Dept reference (docs/reference/loop-dept) with Livento's content.
+ * Landing page in the Loop Dept design-template style, with Livento content.
  * Styles: app/landing.css, all scoped under .lv-landing.
  */
 
@@ -292,6 +292,7 @@ export default function Home() {
           <div className="end">
             <b className="brand">Livento</b>
             <a href="/assets/CREDITS.md">Image credits</a>
+            <Link href="/status">Status</Link>
             <a href="#top">
               Back to top <span aria-hidden="true">↑</span>
             </a>

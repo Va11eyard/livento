@@ -1,5 +1,5 @@
 /*
- * Livento landing page: a port of the Loop Dept reference (docs/reference/loop-dept/style.css).
+ * Livento landing page, adapted from the Loop Dept design template (monochrome, pointer trail).
  * Every selector is scoped under .lv-landing: global CSS imported by a page stays loaded after
  * client-side navigation, so unscoped rules would leak into the app screens.
  * Tokens and shared utilities (.wrap .skip .brand .kicker .display .section .pill .tag) live in

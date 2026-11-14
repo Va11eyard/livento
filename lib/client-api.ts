@@ -14,6 +14,7 @@ import type {
   CheckoutRequest,
   CheckoutResponse,
   EventsResponse,
+  HealthResponse,
   InsightsRequest,
   InsightsResponse,
   LogRequest,
@@ -167,6 +168,7 @@ const isRoadmapResponse = (d: unknown): d is RoadmapResponse => isObject(d) && A
 const isInsightsResponse = (d: unknown): d is InsightsResponse => isObject(d) && Array.isArray(d.months);
 const isAlertResponse = (d: unknown): d is AlertSubscribeResponse => isObject(d) && typeof d.ok === "boolean";
 const isCheckoutResponse = (d: unknown): d is CheckoutResponse => isObject(d);
+const isHealthResponse = (d: unknown): d is HealthResponse => isObject(d) && Array.isArray(d.integrations);
 /** /api/log answers are ignored; any body (or none) is fine. */
 const isAnything = (d: unknown): d is unknown => d !== undefined;
 
@@ -246,6 +248,11 @@ export function subscribeAlerts(req: AlertSubscribeRequest, signal?: AbortSignal
 /** POST /api/checkout — test-mode checkout URL, or `{ demo: true }` when payments are not configured. */
 export function checkout(req: CheckoutRequest, signal?: AbortSignal): Promise<CheckoutResponse> {
   return call("/api/checkout", { method: "POST", body: req, timeoutMs: TIMEOUTS.standard, signal }, isCheckoutResponse);
+}
+
+/** GET /api/health — which integrations are configured on this deployment (no key values). */
+export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  return call("/api/health", { timeoutMs: TIMEOUTS.standard, signal }, isHealthResponse);
 }
 
 /** POST /api/log — anonymous like/skip/save/open (FR-14). Fire-and-forget: never throws, never blocks the UI. */
