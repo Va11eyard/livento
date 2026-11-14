@@ -1,5 +1,22 @@
+/*
+ * Onboarding wizard. Tokens from app/globals.css, chips from components/app/ui.module.css.
+ * < 1024px: one column (question, then controls), no panel border, summary hidden.
+ * >= 1024px: the question on the left (~5/12) with "Your answers so far" under it, the answer
+ * controls in a bordered panel on the right (~7/12) with bigger controls, placed around the
+ * middle of the viewport. Rules that resize shared classes (.field, .pill, ui chips) use two
+ * classes so they win whatever order the stylesheets load in.
+ */
+
+/* Frame ------------------------------------------------------------------ */
+
+.page {
+  padding-top: clamp(28px, 4.5vw, 56px);
+  padding-bottom: clamp(55px, 7vw, 102px);
+}
+
 .layout {
-  max-width: 780px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .top {
@@ -16,7 +33,7 @@
   gap: 8px 24px;
 }
 
-.kicker {
+.topRow .kicker {
   margin-bottom: 0;
 }
 
@@ -43,12 +60,7 @@
   transition: transform 0.2s ease;
 }
 
-.form {
-  display: grid;
-  gap: 0;
-}
-
-.title {
+.intro .title {
   max-width: 22ch;
 }
 .title:focus {
@@ -63,10 +75,21 @@
   margin-top: 14px;
 }
 
+/* The form: answer controls, error, Back / Next ---------------------------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  margin-top: clamp(24px, 3.5vw, 36px);
+}
+
+.fields {
+  flex: 1 0 auto;
+}
+
 .body {
   display: grid;
   gap: 16px;
-  margin-top: clamp(24px, 3.5vw, 36px);
 }
 
 .error {
@@ -83,11 +106,57 @@
   padding-top: 24px;
   border-top: 1px solid var(--line);
 }
+.navRow :global(.pill) {
+  min-height: 48px;
+  padding-inline: 22px;
+}
+/* The shared alt pill shrinks its glyph to 8px (sized for "●"); keep the Back arrow readable. */
+.navRow :global(.pill.alt) span {
+  font-size: 15px;
+}
+
+.panel :global(.field) input {
+  min-height: 48px;
+}
 
 .amount {
   max-width: 220px;
   font-size: 20px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Chip groups (interests, months, ideas, favourites): natural widths, and every row (the last
+   one too) stretches flush to the full width of the group, label centered. */
+.layout .choice,
+.layout .idea {
+  flex: 1 1 auto;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Toggle chips keep the check mark's space (left, mirrored right) in both states, so picking one
+   never changes a chip's width: rows don't reflow and the label stays centered. */
+.layout .choice {
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 15px;
+}
+.layout .choice::before,
+.layout .choice::after {
+  flex: none;
+  width: 11px;
+  font-size: 12px;
+  visibility: hidden;
+}
+.layout .choice::before {
+  content: "✓";
+}
+.layout .choice::after {
+  content: "";
+}
+.layout .choice[data-state="on"]::before {
+  visibility: visible;
 }
 
 /* Favourites */
@@ -98,11 +167,15 @@
   gap: 10px;
 }
 .addRow > :first-child {
-  flex: 1 1 280px;
+  flex: 1 1 220px; /* keeps Add beside the field on a 390px phone */
+}
+.addRow :global(.pill) {
+  min-height: 48px;
 }
 
 .favChip {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 4px;
   min-height: 40px;
@@ -111,6 +184,18 @@
   border-radius: var(--radius-pill);
   background: var(--yellow);
   font: 650 14px var(--font-ui);
+}
+/* Mirrors the remove button (30px + 6px padding vs 14px), so the name stays centered. */
+.favChip::before {
+  content: "";
+  flex: none;
+  width: 22px;
+}
+.favChip span {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 .favChip button {
   display: inline-grid;
@@ -236,9 +321,16 @@
   color: var(--ink-soft);
 }
 
-/* Months */
-.months {
-  max-width: 560px;
+/* Months: the same stretching chips; the basis keeps the rows even (4 + 4 + 4, 6 + 6 from 600px). */
+.layout .months .choice {
+  flex-basis: calc((100% - 3 * 8px) / 4 - 1px);
+  gap: 4px;
+  padding-inline: 4px; /* chips stretch anyway; a small minimum keeps 6 per row on desktop */
+}
+@media (min-width: 600px) {
+  .layout .months .choice {
+    flex-basis: calc((100% - 5 * 8px) / 6 - 1px);
+  }
 }
 
 /* Review */
@@ -268,11 +360,310 @@
   text-align: right;
 }
 
+/* The rule above Back / Next closes the list. */
+.reviewRow:last-child {
+  border-bottom: 0;
+}
+
+/* "Your answers so far" (desktop only) */
+.summary {
+  display: none;
+}
+
+.summaryTitle {
+  margin-bottom: 14px;
+  font: 650 13px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.summaryList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.summaryRow {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 16px;
+}
+.summaryRow dt {
+  font: 650 14px var(--font-ui);
+  color: var(--ink-soft);
+}
+.summaryRow dd {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.summaryRow dd :global(.tag) {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.summaryTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.summaryTags li {
+  padding: 3px 10px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  font: 650 13px/1.3 var(--font-ui);
+}
+
 @media (max-width: 767px) {
   .reviewRow {
     grid-template-columns: minmax(0, 1fr) auto;
   }
   .reviewRow dt {
     grid-column: 1 / -1;
+  }
+}
+
+/* Desktop: two columns, bigger controls --------------------------------- */
+
+@media (min-width: 1024px) {
+  .page {
+    /* Visible height under the fixed header, and the panel's minimum height. Placing the
+       block from a fixed top (instead of centering whatever is there) keeps the question and
+       Next in place between steps and while answers are added; taller steps extend down. */
+    --stage: calc(100vh - var(--nav-h));
+    --block: clamp(420px, calc(var(--stage) - 170px), 560px);
+    min-height: var(--stage);
+    padding-top: max(40px, calc((var(--stage) - var(--block)) / 2 - 20px));
+    padding-bottom: clamp(40px, 6vh, 72px);
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "intro panel"
+      "summary panel";
+    column-gap: clamp(40px, 5vw, 96px);
+    align-items: start;
+  }
+
+  .intro {
+    grid-area: intro;
+  }
+
+  .top {
+    gap: 12px;
+    margin-bottom: clamp(36px, 5vh, 56px);
+  }
+
+  .intro .title {
+    max-width: none;
+    font-size: clamp(36px, 4vw, 64px);
+    line-height: 1;
+    letter-spacing: -0.05em;
+  }
+
+  .intro .lead {
+    margin-top: 20px;
+    font-size: clamp(17px, 1.3vw, 20px);
+  }
+
+  /* Rows: space, controls, space (error goes here), Back / Next. Short steps sit a third of the
+     way into the free space instead of hugging the top; the error never moves the controls. */
+  .panel {
+    grid-area: panel;
+    display: grid;
+    grid-template-rows: 1fr auto 2fr auto;
+    min-height: var(--block);
+    margin-top: 0;
+    padding: clamp(32px, 3.2vw, 48px);
+    background: #fff;
+    border: 1px solid var(--ink);
+    border-radius: var(--radius);
+  }
+  .fields {
+    display: contents;
+  }
+  .body {
+    grid-row: 2;
+    gap: 20px;
+  }
+  .error {
+    grid-row: 3;
+    align-self: start;
+    margin-top: 20px;
+    font-size: 15px;
+  }
+  .navRow {
+    grid-row: 4;
+    gap: 12px;
+    margin-top: 32px;
+    padding-top: 24px;
+  }
+  .navRow :global(.pill) {
+    gap: 14px;
+    min-height: 56px;
+    padding: 16px 30px;
+    font-size: 17px;
+  }
+  .navRow :global(.pill) span,
+  .navRow :global(.pill.alt) span {
+    font-size: 17px;
+  }
+
+  /* Fields */
+  .panel :global(.field) {
+    gap: 8px;
+  }
+  .panel :global(.field) label {
+    font-size: 16px;
+  }
+  .panel :global(.field) input {
+    min-height: 54px;
+    padding: 13px 18px;
+    font-size: 17px;
+  }
+  /* Amounts read like the big radius value */
+  .panel :global(.field) input.amount {
+    max-width: 320px;
+    min-height: 68px;
+    padding-block: 10px;
+    font-family: var(--font-ui);
+    font-weight: 610;
+    font-size: 32px;
+    letter-spacing: -0.03em;
+  }
+  .panel :global(.help) {
+    font-size: 14px;
+  }
+
+  /* Interests and months */
+  .panel .choices,
+  .panel .months {
+    gap: 12px;
+  }
+  .panel .choice {
+    gap: 8px;
+    min-height: 56px;
+    padding: 12px 18px;
+    font-size: 17px;
+  }
+  /* Three classes: the shared on-state rule sets the check's size too. */
+  .layout .panel .choice::before,
+  .layout .panel .choice::after {
+    width: 13px;
+    font-size: 14px;
+  }
+  .panel .months .choice {
+    flex-basis: calc((100% - 3 * 12px) / 4 - 1px);
+    gap: 4px;
+  }
+
+  /* Favourites */
+  .panel .addRow {
+    gap: 12px;
+  }
+  .panel .addRow :global(.pill) {
+    min-height: 54px;
+    padding-inline: 26px;
+    font-size: 16px;
+  }
+  .panel .favChip {
+    min-height: 46px;
+    padding: 6px 8px 6px 18px;
+    font-size: 16px;
+  }
+  .panel .favChip::before {
+    width: 24px;
+  }
+  .panel .favChip button {
+    width: 34px;
+    height: 34px;
+    font-size: 20px;
+  }
+  .panel .ideas {
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .panel .ideasLabel {
+    font-size: 13px;
+  }
+  .panel .idea {
+    min-height: 46px;
+    padding: 10px 18px;
+    font-size: 16px;
+  }
+
+  /* City */
+  .panel .listbox {
+    padding: 8px;
+  }
+  .panel .option {
+    padding: 12px 16px;
+    font-size: 17px;
+  }
+
+  /* Radius */
+  .panel .sliderBlock {
+    max-width: none;
+    gap: 18px;
+  }
+  .panel .sliderValue {
+    font-size: clamp(56px, 5vw, 80px);
+  }
+  .panel .slider {
+    height: 44px;
+  }
+  .panel .sliderTrack {
+    height: 14px;
+  }
+  .panel .sliderThumb {
+    width: 36px;
+    height: 36px;
+  }
+  .panel .sliderScale {
+    font-size: 15px;
+  }
+
+  /* Review */
+  .panel .reviewRow {
+    grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) auto;
+    gap: 6px 24px;
+    padding: 11px 0;
+  }
+  .panel .reviewRow dt {
+    font-size: 15px;
+  }
+  .panel .reviewRow dd {
+    font-size: 17px;
+  }
+
+  /* Summary under the question */
+  .summary {
+    grid-area: summary;
+    display: block;
+    margin-top: clamp(32px, 4.5vh, 48px);
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (min-width: 1280px) {
+  .panel .months .choice {
+    flex-basis: calc((100% - 5 * 12px) / 6 - 1px);
+  }
+}
+
+@supports (height: 100svh) {
+  @media (min-width: 1024px) {
+    .page {
+      --stage: calc(100svh - var(--nav-h));
+    }
   }
 }

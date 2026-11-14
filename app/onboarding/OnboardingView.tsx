@@ -257,6 +257,9 @@ function Wizard() {
   const { profile: existing } = useAppState();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(existing));
   const [step, setStep] = useState(0);
+  // Furthest step reached, so "Your answers so far" keeps later answers when the user goes back.
+  // A saved profile means every answer is already given.
+  const [reached, setReached] = useState(() => (existing ? STEPS.length - 1 : 0));
   const [error, setError] = useState<string | null>(null);
   const [favInput, setFavInput] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -363,6 +366,7 @@ function Wizard() {
       return;
     }
     setError(null);
+    setReached((r) => Math.max(r, step + 1));
     setStep((s) => Math.min(total - 1, s + 1));
   };
 
@@ -401,10 +405,10 @@ function Wizard() {
             onValueChange={(value) => update({ interests: value.filter((v): v is Category => (CATEGORIES as readonly string[]).includes(v)) })}
             aria-label="Interests"
             aria-describedby={described}
-            className={ui.chips}
+            className={`${ui.chips} ${styles.choices}`}
           >
             {CATEGORIES.map((c) => (
-              <ToggleGroup.Item key={c} value={c} className={ui.chip}>
+              <ToggleGroup.Item key={c} value={c} className={`${ui.chip} ${styles.choice}`}>
                 {CATEGORY_LABELS[c]}
               </ToggleGroup.Item>
             ))}
@@ -467,7 +471,7 @@ function Wizard() {
               <p className={styles.ideasLabel}>Ideas</p>
               <div className={ui.chips}>
                 {ideas.map((idea) => (
-                  <button key={idea} type="button" className={ui.chip} onClick={() => addFavourite(idea)}>
+                  <button key={idea} type="button" className={`${ui.chip} ${styles.idea}`} onClick={() => addFavourite(idea)}>
                     + {idea}
                   </button>
                 ))}
@@ -648,7 +652,7 @@ function Wizard() {
             className={`${ui.chips} ${styles.months}`}
           >
             {MONTHS.map((m, i) => (
-              <ToggleGroup.Item key={m} value={String(i + 1)} className={ui.chip} aria-label={MONTH_NAMES[i]}>
+              <ToggleGroup.Item key={m} value={String(i + 1)} className={`${ui.chip} ${styles.choice}`} aria-label={MONTH_NAMES[i]}>
                 {m}
               </ToggleGroup.Item>
             ))}
@@ -710,46 +714,99 @@ function Wizard() {
     }
   }
 
-  return (
-    <div className={`wrap ${ui.page}`}>
-      <div className={styles.layout}>
-        <div className={styles.top}>
-          <div className={styles.topRow}>
-            <p className={`kicker ${styles.kicker}`}>
-              {String(step + 1).padStart(2, "0")} / {STEPS[step].label}
-            </p>
-            {existing ? (
-              <Link href="/discover" className={ui.inlineLink}>
-                Back to Discover
-              </Link>
-            ) : (
-              <button
-                type="button"
-                className={ui.textButton}
-                onClick={() => {
-                  loadSampleProfile();
-                  router.push("/discover");
-                }}
-              >
-                Try a sample profile instead
-              </button>
-            )}
-          </div>
-          <p className={styles.stepCount} aria-hidden="true">
-            Step {step + 1} of {total}
-          </p>
-          <Progress.Root
-            className={styles.progress}
-            value={step + 1}
-            max={total}
-            aria-label="Onboarding progress"
-            getValueLabel={(value, max) => `Step ${value} of ${max}`}
-          >
-            <Progress.Indicator className={styles.progressFill} style={{ transform: `translateX(-${100 - pct}%)` }} />
-          </Progress.Root>
-        </div>
+  // "Your answers so far" (desktop): only answers already given, never defaults of steps not reached yet.
+  const given = (key: StepKey) => STEPS.findIndex((s) => s.key === key) < reached;
+  const budgetAmount = parseAmount(draft.budget, 100_000);
+  const hotelAmount = parseAmount(draft.hotel, 10_000);
+  const travelAmount = parseAmount(draft.travel, 20_000);
+  const vacationDays = parseAmount(draft.vacation, 365);
+  const answers: { key: StepKey; value: ReactNode }[] = [];
+  if (draft.interests.length) {
+    answers.push({
+      key: "interests",
+      value: (
+        <ul className={styles.summaryTags}>
+          {draft.interests.map((c) => (
+            <li key={c}>{CATEGORY_LABELS[c]}</li>
+          ))}
+        </ul>
+      ),
+    });
+  }
+  if (draft.favourites.length) {
+    const more = draft.favourites.length - 3;
+    const shown = draft.favourites.slice(0, 3).join(", ");
+    answers.push({ key: "favourites", value: more > 0 ? `${shown} and ${more} more` : shown });
+  }
+  if (draft.city) answers.push({ key: "city", value: cityLabel(draft.city) });
+  if (given("radius")) answers.push({ key: "radius", value: `${draft.radiusMiles} mi` });
+  if (given("budget") && budgetAmount !== null) answers.push({ key: "budget", value: `${usd0(budgetAmount)}/month` });
+  if (given("hotel") && hotelAmount !== null) {
+    answers.push({
+      key: "hotel",
+      value: (
+        <>
+          {usd0(hotelAmount)}/night <span className="tag estimate">Estimate</span>
+        </>
+      ),
+    });
+  }
+  if (given("travel") && travelAmount !== null) {
+    answers.push({
+      key: "travel",
+      value: (
+        <>
+          {usd0(travelAmount)}/trip <span className="tag estimate">Estimate</span>
+        </>
+      ),
+    });
+  }
+  if (given("vacation") && vacationDays !== null) answers.push({ key: "vacation", value: `${Math.round(vacationDays)} left` });
+  if (draft.months.length || given("months")) {
+    answers.push({ key: "months", value: draft.months.length ? draft.months.map((m) => MONTHS[m - 1]).join(", ") : "Any month" });
+  }
+  const showSummary = current !== "review" && answers.length > 0;
 
-        <form className={styles.form} onSubmit={next} noValidate aria-labelledby={`${ids}-title`}>
+  return (
+    <div className={`wrap ${styles.page}`}>
+      <div className={styles.layout}>
+        <div className={styles.intro}>
+          <div className={styles.top}>
+            <div className={styles.topRow}>
+              <p className={`kicker ${styles.kicker}`}>
+                {String(step + 1).padStart(2, "0")} / {STEPS[step].label}
+              </p>
+              {existing ? (
+                <Link href="/discover" className={ui.inlineLink}>
+                  Back to Discover
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className={ui.textButton}
+                  onClick={() => {
+                    loadSampleProfile();
+                    router.push("/discover");
+                  }}
+                >
+                  Try a sample profile instead
+                </button>
+              )}
+            </div>
+            <p className={styles.stepCount} aria-hidden="true">
+              Step {step + 1} of {total}
+            </p>
+            <Progress.Root
+              className={styles.progress}
+              value={step + 1}
+              max={total}
+              aria-label="Onboarding progress"
+              getValueLabel={(value, max) => `Step ${value} of ${max}`}
+            >
+              <Progress.Indicator className={styles.progressFill} style={{ transform: `translateX(-${100 - pct}%)` }} />
+            </Progress.Root>
+          </div>
+
           <h1 id={`${ids}-title`} ref={headingRef} tabIndex={-1} className={`title ${styles.title}`}>
             <span className="sr-only">
               Step {step + 1} of {total}:{" "}
@@ -757,14 +814,18 @@ function Wizard() {
             {title}
           </h1>
           <p className={`lead muted ${styles.lead}`}>{lead}</p>
+        </div>
 
-          <div className={styles.body}>{body}</div>
+        <form className={styles.panel} onSubmit={next} noValidate aria-labelledby={`${ids}-title`}>
+          <div className={styles.fields}>
+            <div className={styles.body}>{body}</div>
 
-          {error ? (
-            <p id={errorId} className={`${ui.error} ${styles.error}`} role="alert">
-              {error}
-            </p>
-          ) : null}
+            {error ? (
+              <p id={errorId} className={`${ui.error} ${styles.error}`} role="alert">
+                {error}
+              </p>
+            ) : null}
+          </div>
 
           <div className={styles.navRow}>
             <button type="button" className="pill alt" onClick={back} disabled={step === 0}>
@@ -776,6 +837,23 @@ function Wizard() {
             </button>
           </div>
         </form>
+
+        {/* After the form in the DOM (tab and reading order stay heading → controls); shown under the question on desktop. */}
+        {showSummary ? (
+          <aside className={styles.summary} aria-labelledby={`${ids}-summary`}>
+            <h2 id={`${ids}-summary`} className={styles.summaryTitle}>
+              Your answers so far
+            </h2>
+            <dl className={styles.summaryList}>
+              {answers.map((answer) => (
+                <div key={answer.key} className={styles.summaryRow}>
+                  <dt>{STEPS.find((s) => s.key === answer.key)?.label}</dt>
+                  <dd>{answer.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </aside>
+        ) : null}
       </div>
     </div>
   );

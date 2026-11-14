@@ -12,6 +12,16 @@ import "./landing.css";
  * Styles: app/landing.css, all scoped under .lv-landing.
  */
 
+const CATEGORIES = ["Concerts", "Theatre", "Festivals", "Cinema", "Big experiences"];
+
+/** Section 01 roadmap. Plain content in an ordered list: nothing here is a control. */
+const ROADMAP = [
+  { title: "Discover", text: "Events near you, ranked for your interests and budget." },
+  { title: "Plan", text: "The full cost with fees, travel and hotel, plus dated steps." },
+  { title: "Save", text: "Your Livento wallet saves for you: a weekly amount moves in from your card automatically." },
+  { title: "Go", text: "Presale reminders, hotel links and a day-of checklist." },
+];
+
 const EXPERIENCES = [
   {
     title: "Concerts",
@@ -35,7 +45,7 @@ const EXPERIENCES = [
     image: "/assets/trail/festival.webp",
     alt: "A festival crowd on the grass watching an outdoor stage at golden hour",
     line: "Weekends worth planning months ahead, travel and a place to stay included.",
-    more: "Big weekends can sell out early. Livento shows on-sale dates when they’re known and works out what to set aside each week to be ready.",
+    more: "Big weekends can sell out early. Livento shows on-sale dates when they’re known and works out how much your wallet should save each week to be ready.",
   },
   {
     title: "Cinema nights",
@@ -61,9 +71,9 @@ const STEPS = [
     text: "Tickets, fees, travel and a hotel night when you need one, added up in one total. Every estimate is labeled, and you can edit it.",
   },
   {
-    title: "Save in envelopes",
+    title: "Save in your wallet",
     premium: true,
-    text: "See the weekly amount to set aside and get reminders to do it. Envelopes only track your plan: your money stays in your own bank.",
+    text: "Every goal gets its own envelope in your Livento wallet. Turn on auto-save and the weekly amount is withdrawn from your card automatically. Withdraw it back anytime.",
   },
   {
     title: "Get your roadmap",
@@ -71,9 +81,9 @@ const STEPS = [
     text: "A step-by-step plan for the trip: when to ask for time off, when presales open, and hotel links for your dates.",
   },
   {
-    title: "See your impulse spend",
+    title: "See where your money goes",
     premium: true,
-    text: "Upload a bank statement (CSV) to see where small impulse buys add up. It’s processed in memory and never stored.",
+    text: "Upload a bank statement (CSV) to see your spending by category and month. Pick what you’d spend less on and see how much sooner you’d get there. The summary is saved on this device; the file itself isn’t kept.",
   },
 ];
 
@@ -84,15 +94,15 @@ const FREE_FEATURES = [
 ];
 
 const PREMIUM_FEATURES = [
-  "Savings envelopes",
-  "Weekly reminders to set money aside",
+  "Livento wallet with an envelope per goal",
+  "Automatic weekly withdrawal from your card",
   "Spend-vs-save comparator",
   "Trip roadmap",
-  "Impulse-spending insights",
+  "Spending breakdown from your bank statement",
 ];
 
 export default function Home() {
-  // The wordmark is the largest thing above the fold; fetch its font early (as the reference did).
+  // The wordmark is the largest text above the fold; fetch its font early (as the reference did).
   preload("/assets/fonts/oswald.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
 
   return (
@@ -105,63 +115,55 @@ export default function Home() {
       <main id="main">
         <section className="hero" id="top" aria-labelledby="lv-word">
           <Trail
-            top={
-              <div className="top">
+            copy={
+              <>
                 <h1 id="lv-word" className="wordmark">
                   Livento
                 </h1>
-                <div className="rails">
-                  <div>
-                    Concerts
-                    <br />
-                    Theatre
-                    <br />
-                    Festivals
-                    <br />
-                    Cinema
-                    <br />
-                    Big experiences
-                  </div>
-                  <div>
-                    Discover
-                    <br />
-                    Plan
-                    <br />
-                    Save
-                    <br />
-                    Go
-                  </div>
-                  <div className="rail-links">
+                <h2 className="motto">Spend on memories, not impulses.</h2>
+                <p className="hero-lead">
+                  Livento finds concerts, shows and trips you’ll actually love, shows what they really cost, and saves
+                  for them in your Livento wallet, one week at a time.
+                </p>
+                <div className="actions hero-actions">
+                  <Link className="pill" href="/onboarding">
+                    Start planning <span aria-hidden="true">↗</span>
+                  </Link>
+                  <a className="pill alt" href="#how">
+                    How it works <span aria-hidden="true">●</span>
+                  </a>
+                </div>
+              </>
+            }
+            foot={
+              <div className="rails">
+                <ul>
+                  {CATEGORIES.map((category) => (
+                    <li key={category}>{category}</li>
+                  ))}
+                </ul>
+                <ol>
+                  {ROADMAP.map((step) => (
+                    <li key={step.title}>{step.title}</li>
+                  ))}
+                </ol>
+                <ul className="rail-links">
+                  <li>
                     <Link href="/onboarding">
                       Start <span aria-hidden="true">↗</span>
                     </Link>
+                  </li>
+                  <li>
                     <Link href="/onboarding?sample=1">
                       Sample profile <span aria-hidden="true">↗</span>
                     </Link>
+                  </li>
+                  <li>
                     <a href="#pricing">
                       Pricing <span aria-hidden="true">↗</span>
                     </a>
-                  </div>
-                </div>
-              </div>
-            }
-            foot={
-              <div className="hero-foot">
-                <h2>Spend on memories, not impulses.</h2>
-                <div>
-                  <p>
-                    Livento finds concerts, shows and trips you’ll actually love, shows what they really cost, and
-                    helps you set money aside, one week at a time.
-                  </p>
-                  <div className="actions">
-                    <Link className="pill" href="/onboarding">
-                      Start planning <span aria-hidden="true">↗</span>
-                    </Link>
-                    <a className="pill alt" href="#how">
-                      How it works <span aria-hidden="true">●</span>
-                    </a>
-                  </div>
-                </div>
+                  </li>
+                </ul>
               </div>
             }
           />
@@ -170,14 +172,18 @@ export default function Home() {
         <section id="about" className="wrap section" aria-labelledby="about-title">
           <div className="kicker">01 / Why Livento</div>
           <h2 id="about-title" className="display">
-            Turn impulse spending into experiences you’ll remember
+            Turn everyday spending into experiences you’ll remember
           </h2>
-          <div className="steps">
-            <strong>How it works</strong>
-            <span>Discover</span>
-            <span>Save</span>
-            <span>Go</span>
-          </div>
+          <ol className="roadmap" aria-label="How Livento works, in four steps">
+            {ROADMAP.map((step, index) => (
+              <li key={step.title}>
+                <h3>
+                  <span className="roadmap-num">{String(index + 1).padStart(2, "0")}</span> {step.title}
+                </h3>
+                <p>{step.text}</p>
+              </li>
+            ))}
+          </ol>
         </section>
 
         <section id="experiences" className="works" aria-labelledby="experiences-title">
@@ -200,10 +206,10 @@ export default function Home() {
                   <details>
                     <summary>Discover more</summary>
                     <p>{item.more}</p>
-                    <Link className="explore" href="/onboarding">
-                      Explore <span aria-hidden="true">↗</span>
-                    </Link>
                   </details>
+                  <Link className="pill alt small explore" href="/onboarding">
+                    Explore<span className="sr-only"> {item.title}</span> <span aria-hidden="true">↗</span>
+                  </Link>
                 </article>
               ))}
             </div>
@@ -214,7 +220,7 @@ export default function Home() {
           <div className="wrap section">
             <div className="kicker">03 / How it works</div>
             <h2 id="how-title" className="display">
-              From impulse to plan
+              From wish to plan
             </h2>
             <div className="service-list">
               {STEPS.map((step, index) => (
@@ -274,20 +280,22 @@ export default function Home() {
       <footer id="start" className="foot" aria-labelledby="start-title">
         <div className="wrap section">
           <div className="kicker">05 / Start</div>
-          <h2 id="start-title" className="display">
+          <h2 id="start-title" className="display foot-title">
             Where do you want to be next?
           </h2>
-          <p className="foot-copy">
-            Answer 8 quick questions and get your first plan in under two minutes. No account needed.
-          </p>
-          <div className="actions">
-            <Link className="pill" href="/onboarding">
-              Start planning <span aria-hidden="true">↗</span>
-            </Link>
-            <Link className="pill alt" href="/onboarding?sample=1">
-              Try a sample profile <span aria-hidden="true">●</span>
-            </Link>
-            <WishDialog />
+          <div className="foot-row">
+            <p className="foot-copy">
+              Answer 8 quick questions and get your first plan in under two minutes. No account needed.
+            </p>
+            <div className="actions foot-actions">
+              <Link className="pill" href="/onboarding">
+                Start planning <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="pill alt" href="/onboarding?sample=1">
+                Try a sample profile <span aria-hidden="true">●</span>
+              </Link>
+              <WishDialog />
+            </div>
           </div>
           <div className="end">
             <b className="brand">Livento</b>

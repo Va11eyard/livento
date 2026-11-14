@@ -35,7 +35,6 @@
 
 .lv-landing .nav nav a:hover,
 .lv-landing .rail-links a:hover,
-.lv-landing .explore:hover,
 .lv-landing .end a:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
@@ -55,66 +54,61 @@
   isolation: isolate;
 }
 
+/*
+ * Main message first: wordmark, motto, intro text and both actions sit together in the copy column,
+ * so all of it is above the fold from 1366×768 up. The stage (intro card + "Play the trail") is the
+ * secondary column, and the rails are a compact row along the bottom.
+ * Stacking inside .hero: intro card 2 < trail stamps 3 < copy, controls and rails 4.
+ */
 .lv-landing .hero-inner {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: max(730px, 100svh);
-  padding-top: clamp(89px, 10.2vh, 132px);
-  padding-bottom: clamp(32px, 5vh, 58px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "copy stage"
+    "rails rails";
+  gap: clamp(24px, 4vh, 44px) clamp(28px, 4vw, 64px);
+  min-height: max(600px, 100svh);
+  padding-top: calc(var(--nav-h) + clamp(20px, 4vh, 48px));
+  padding-bottom: clamp(10px, 2vh, 22px);
 }
 
-.lv-landing .top,
-.lv-landing .hero-foot {
+.lv-landing .hero-copy {
+  grid-area: copy;
+  align-self: center;
   position: relative;
-  z-index: 1;
+  z-index: 4;
 }
 
 /*
- * The reference sizes a 9-letter word with min(23.4vw, 34vh). "Livento" is 7 letters (2.82em vs
- * 3.84em wide in Oswald 600), so the width term is larger to keep the same edge-to-edge feel.
- * The 34vh height cap is unchanged, so the hero still fits the viewport.
+ * Smaller than the reference's edge-to-edge word so the message fits beside it, and slanted like
+ * the header logo (.brand: skewX(-12deg) from the bottom left) so the brand looks the same everywhere.
  */
 .lv-landing .wordmark {
-  margin: 0 0 0.12em -0.034em;
-  font: 600 clamp(108px, min(30vw, 34vh), 420px) / 0.93 var(--font-display);
+  width: fit-content;
+  margin: 0 0 clamp(12px, 2.2vh, 24px) -0.034em;
+  font: 600 clamp(80px, min(15vw, 21vh), 210px) / 0.93 var(--font-display);
   letter-spacing: -0.06em;
   text-transform: uppercase;
   color: #090909;
+  transform: skewX(-12deg);
+  transform-origin: left bottom;
 }
 
-.lv-landing .rails {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: clamp(30px, 8vw, 120px);
-  font: 680 14px / 1.48 var(--font-ui);
-  text-transform: uppercase;
-}
-
-.lv-landing .rail-links {
-  display: grid;
-  align-content: start;
-  text-align: right;
-}
-
-.lv-landing .hero-foot {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: start;
-  gap: 70px;
-}
-
-.lv-landing .hero-foot h2 {
-  max-width: 22ch;
-  font: 600 clamp(26px, 2.28vw, 34px) / 1.08 var(--font-ui);
+.lv-landing .motto {
+  max-width: 12em;
+  font: 600 clamp(34px, 4.2vw, 64px) / 1.02 var(--font-ui);
   letter-spacing: -0.045em;
+  text-wrap: balance;
 }
 
-.lv-landing .hero-foot p {
-  max-width: 40ch;
-  font-size: clamp(16px, 1.28vw, 19px);
-  line-height: 1.37;
+.lv-landing .hero-lead {
+  max-width: 38ch;
+  margin-top: clamp(12px, 2.2vh, 22px);
+  font-size: clamp(19px, 1.4vw, 22px);
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 .lv-landing .actions {
@@ -125,36 +119,118 @@
   margin-top: 21px;
 }
 
+.lv-landing .hero-actions {
+  gap: 12px;
+  margin-top: clamp(20px, 3.4vh, 34px);
+}
+
+/* Big CTAs (hero and section 05), links and buttons alike, so every pill in a group has one height.
+   Scoped here so the shared .pill keeps its size everywhere else. */
+.lv-landing .hero-actions .pill,
+.lv-landing .foot-actions .pill {
+  min-height: 56px;
+  padding: 0 30px;
+  gap: 22px;
+  font-size: 17px;
+}
+
+.lv-landing .hero-actions .pill span,
+.lv-landing .foot-actions .pill span {
+  font-size: 17px;
+}
+
+.lv-landing .hero-actions .pill.alt span,
+.lv-landing .foot-actions .pill.alt span {
+  font-size: 9px;
+}
+
+/* Compact rails row: categories · steps · quick links. */
+.lv-landing .rails {
+  grid-area: rails;
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: clamp(20px, 3vw, 48px);
+  border-top: 1px solid var(--line);
+  padding-top: 2px;
+  font: 680 13px / 1.4 var(--font-ui);
+  text-transform: uppercase;
+}
+
+.lv-landing .rails ul,
+.lv-landing .rails ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lv-landing .rails li {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+/* Separator dot (empty content, so screen readers skip it). */
+.lv-landing .rails li + li::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  margin-inline: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.lv-landing .rail-links {
+  column-gap: 22px;
+}
+
+.lv-landing .rails .rail-links li::before {
+  content: none;
+}
+
+.lv-landing .rail-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+}
+
 /* ----------------------------------------------------- stage and trail */
 
-.lv-landing .stage,
+.lv-landing .stage {
+  grid-area: stage;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(26px, 4.5vh, 44px);
+}
+
 .lv-landing .trail {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-}
-
-.lv-landing .stage {
-  z-index: 2;
-}
-
-.lv-landing .trail {
   z-index: 3;
+  pointer-events: none;
   transition: opacity 0.18s ease;
 }
 
-/* Quiet zone: while the pointer is near a link or button in the hero, existing
-   stamps fade out so they never cover what the user is about to click. */
+/* Quiet zone: while the pointer is over the hero copy or near a link or button, existing
+   stamps fade out so they never cover what the user is reading or about to click. */
 .lv-landing .trail-quiet .trail {
   opacity: 0;
 }
 
 .lv-landing .intro-card {
-  position: absolute;
-  top: 49%;
-  left: 62%;
-  width: clamp(150px, 16vw, 238px);
-  transform: translate(-50%, -50%) rotate(6deg);
+  position: relative;
+  z-index: 2;
+  width: clamp(160px, 17vw, 260px);
+  transform: rotate(6deg);
   transition: opacity 0.2s;
   animation: lv-arrive 0.75s cubic-bezier(0.19, 1, 0.22, 1) both;
 }
@@ -206,33 +282,61 @@
   will-change: transform, opacity;
 }
 
+/* "Play the trail": a quiet text button with a small yellow play disc, secondary to the CTAs. */
 .lv-landing .experiment {
   position: relative;
   z-index: 4;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  align-self: flex-start;
-  gap: 9px;
-  margin-block: clamp(20px, 5vh, 65px);
+  justify-content: center;
+  gap: 0 12px;
   font: 600 14px var(--font-ui);
 }
 
 .lv-landing .experiment button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0;
   border: 0;
-  border-radius: 99px;
-  background: var(--yellow);
-  padding: 10px 14px;
+  background: none;
   font: inherit;
 }
 
 .lv-landing .experiment i {
-  width: 0;
-  height: 0;
-  border-block: 4px solid transparent;
-  border-left: 6px solid currentColor;
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+  transition: background-color 0.15s ease;
+}
+
+.lv-landing .experiment i::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: 11px;
+  border-block: 5px solid transparent;
+  border-left: 8px solid var(--ink);
+  transition: border-color 0.15s ease;
+}
+
+.lv-landing .experiment button:hover i {
+  background: var(--ink);
+}
+
+.lv-landing .experiment button:hover i::before {
+  border-left-color: var(--yellow);
+}
+
+.lv-landing .experiment button:hover span {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .lv-landing .hint {
@@ -242,17 +346,81 @@
 @keyframes lv-arrive {
   from {
     opacity: 0;
-    transform: translate(-50%, -43%) rotate(-2deg) scale(0.86);
+    transform: translateY(7%) rotate(-2deg) scale(0.86);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) rotate(6deg);
+    transform: rotate(6deg);
   }
 }
 
 /* -------------------------------------------------------- 01 why livento */
 
-.lv-landing .steps,
+/*
+ * Four-step roadmap: an ordered list of plain text. Yellow markers sit on one line that joins the
+ * steps (horizontal here, vertical on phones). No borders, fills or hover states: nothing to click.
+ */
+.lv-landing .roadmap {
+  --dot: 15px;
+  --gap-x: clamp(20px, 3vw, 44px);
+  --gap-y: 34px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gap-y) var(--gap-x);
+  margin: clamp(44px, 6vw, 72px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lv-landing .roadmap li {
+  position: relative;
+  padding-top: calc(var(--dot) + 24px);
+}
+
+.lv-landing .roadmap li::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: var(--dot);
+  height: var(--dot);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+/* The line runs from each marker to the next one. */
+.lv-landing .roadmap li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--dot) / 2 - 0.5px);
+  left: var(--dot);
+  width: calc(100% - var(--dot) + var(--gap-x));
+  height: 1px;
+  background: var(--ink);
+}
+
+.lv-landing .roadmap h3 {
+  font: 650 clamp(24px, 2.4vw, 32px) / 1.1 var(--font-ui);
+  letter-spacing: -0.05em;
+}
+
+.lv-landing .roadmap-num {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0.035em;
+  color: var(--ink-soft);
+}
+
+.lv-landing .roadmap p {
+  max-width: 30ch;
+  margin-top: 10px;
+  color: var(--ink-soft);
+}
+
 .lv-landing .end {
   display: flex;
   align-items: center;
@@ -262,10 +430,6 @@
   margin-top: 58px;
   padding-top: 24px;
   border-top: 1px solid var(--line);
-}
-
-.lv-landing .steps span {
-  font: 650 clamp(17px, 2vw, 26px) var(--font-ui);
 }
 
 /* --------------------------------------------------------- 02 experiences */
@@ -330,10 +494,14 @@
   margin: 10px 0;
 }
 
+/* Always visible under "Discover more" (outside the details), so every card has a way in. */
 .lv-landing .explore {
-  display: inline-block;
-  margin-bottom: 4px;
-  font: 650 15px var(--font-ui);
+  margin-top: 14px;
+}
+
+/* .pill.alt shrinks its trailing glyph for the ● dot; this one is an arrow. */
+.lv-landing .explore span[aria-hidden] {
+  font-size: 14px;
 }
 
 /* ------------------------------------------------- 03 how it works (dark) */
@@ -434,9 +602,32 @@
   background: var(--yellow);
 }
 
+/* 05: one big statement across the width, then the copy (left) and every action in one row (right). */
+.lv-landing .foot .section {
+  padding-block: clamp(55px, 6vw, 88px);
+}
+
+.lv-landing .foot-title {
+  max-width: none;
+  font-size: clamp(44px, 10.4vw, 150px);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+
+.lv-landing .foot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px 48px;
+  margin-top: clamp(28px, 3.6vw, 52px);
+}
+
 .lv-landing .foot-copy {
-  max-width: 52ch;
-  margin: 20px 0;
+  max-width: 34ch;
+  font-size: clamp(17px, 1.3vw, 20px);
+  line-height: 1.4;
+  text-wrap: balance;
 }
 
 .lv-landing .foot .actions {
@@ -444,6 +635,7 @@
 }
 
 .lv-landing .end {
+  margin-top: clamp(40px, 4.5vw, 58px);
   border-color: #b5af65;
 }
 
@@ -533,62 +725,87 @@
     display: flex;
   }
 
+  /* One column: copy, then the stage as a row (play control left, intro card right), then rails. */
   .lv-landing .hero-inner {
-    min-height: max(690px, 100svh);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "copy"
+      "stage"
+      "rails";
+    min-height: max(640px, 100svh);
+  }
+
+  .lv-landing .hero-copy {
+    align-self: start;
+  }
+
+  .lv-landing .stage {
+    flex-direction: row-reverse;
+    gap: clamp(16px, 5vw, 48px);
   }
 }
 
 @media (max-width: 767px) {
   .lv-landing .hero-inner {
-    min-height: max(760px, 100svh);
-    padding-top: 86px;
-    padding-bottom: 30px;
+    row-gap: 26px;
+    padding-top: calc(var(--nav-h) + 22px);
+    padding-bottom: 12px;
   }
 
   .lv-landing .wordmark {
-    font-size: clamp(84px, 29vw, 200px);
+    font-size: clamp(64px, 22vw, 115px);
   }
 
   .lv-landing .rails {
-    gap: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-top: 8px;
     font-size: 12px;
   }
 
-  .lv-landing .hero-foot {
-    grid-template-columns: 1fr;
-    gap: 14px;
+  .lv-landing .rails ul,
+  .lv-landing .rails ol {
+    column-gap: 16px;
   }
 
-  .lv-landing .hero-foot h2 {
-    max-width: 22ch;
-    font-size: 30px;
+  /* Phones wrap the rails, so items are spaced instead of dotted (no dot starting a line). */
+  .lv-landing .rails li {
+    min-height: 28px;
   }
 
-  .lv-landing .hero-foot p {
-    max-width: 43ch;
+  .lv-landing .rails li + li::before {
+    content: none;
   }
 
   .lv-landing .intro-card {
-    top: 48%;
-    left: 65%;
     width: 140px;
+    margin-right: 6px;
   }
 
   .lv-landing .stamp {
     width: 135px;
   }
 
-  .lv-landing .experiment {
-    margin-top: 90px;
-    margin-bottom: 28px;
-  }
-
   .lv-landing .hint {
     display: none;
   }
 
+  /* Every landing button group (hero, pricing, 05) stacks full-width at one height: no ragged rows. */
   .lv-landing .actions {
+    flex-direction: column;
+    align-items: stretch;
     margin-top: 14px;
+  }
+
+  .lv-landing .hero-actions {
+    margin-top: 22px;
+  }
+
+  .lv-landing .foot-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
   }
 
   .lv-landing .workgrid,
@@ -596,12 +813,25 @@
     grid-template-columns: 1fr;
   }
 
-  .lv-landing .steps {
-    justify-content: start;
+  /* Vertical roadmap: markers in a column on the left, joined by a vertical line. */
+  .lv-landing .roadmap {
+    --gap-y: 30px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .lv-landing .steps strong {
-    width: 100%;
+  .lv-landing .roadmap li {
+    padding: 0 0 0 calc(var(--dot) + 20px);
+  }
+
+  .lv-landing .roadmap li::before {
+    top: 2px;
+  }
+
+  .lv-landing .roadmap li:not(:last-child)::after {
+    top: calc(2px + var(--dot));
+    left: calc(var(--dot) / 2 - 0.5px);
+    width: 1px;
+    height: calc(100% - var(--dot) + var(--gap-y));
   }
 
   .lv-landing .nav nav.open {
@@ -620,8 +850,14 @@
 
 @media (max-width: 380px) {
   .lv-landing .rails {
-    gap: 10px;
     font-size: 11px;
+  }
+}
+
+/* No cursor on touch screens, so the "or move your cursor" hint would be wrong there. */
+@media (hover: none) {
+  .lv-landing .hint {
+    display: none;
   }
 }
 

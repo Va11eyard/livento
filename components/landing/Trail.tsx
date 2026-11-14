@@ -5,10 +5,13 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 /*
- * Hero pointer trail in the Loop Dept design-template style.
+ * Hero pointer trail in the Loop Dept design-template style, kept secondary to the hero copy.
  * Stamps alternate between photos and animated loops, follow the pointer with a distance + time
  * throttle, keep at most 7 on screen, and fade out with the Web Animations API. Touch adds a stamp
- * per tap. "Play the trail" runs a fixed path. Reduced motion: static posters, no pointer trail.
+ * per tap. "Play the trail" runs a fixed path inside the stage (the intro-card column beside the
+ * copy; under it on narrow screens). Reduced motion: static posters, no pointer trail.
+ * Quiet zones: no stamp starts where it would cover the hero copy, or within QUIET_PAD of a link or
+ * button, and existing stamps fade out while the pointer is in one.
  * Everything is imperative DOM work inside one effect so React re-renders never touch the stamps.
  */
 
@@ -20,37 +23,44 @@ const MAX_STAMPS = 7;
 const LIFE_MS = 1330;
 const STILL_LIFE_MS = 850;
 type Pose = readonly [x: number, y: number];
+/** "Play the trail" loop around the intro card, as fractions of the stage box. */
 const PATH: readonly Pose[] = [
+  [0.2, 0.55],
+  [0.3, 0.36],
+  [0.5, 0.3],
+  [0.7, 0.37],
+  [0.8, 0.54],
+  [0.65, 0.66],
+  [0.45, 0.64],
   [0.3, 0.5],
-  [0.42, 0.43],
-  [0.55, 0.4],
-  [0.66, 0.45],
-  [0.73, 0.53],
-  [0.63, 0.58],
-  [0.51, 0.55],
-  [0.42, 0.49],
 ];
-const STILL_PATH: readonly Pose[] = [[0.53, 0.49]];
+const STILL_PATH: readonly Pose[] = [[0.5, 0.42]];
 /** No stamps within this many px of a link or button, so the trail never covers a click target. */
 const QUIET_PAD = 44;
+/** Extra px kept between the hero copy and a stamp (stamps are centred on the pointer and tilted). */
+const COPY_PAD = 16;
 
 type TrailProps = {
-  /** Wordmark + rails, rendered above the stage. */
-  top: ReactNode;
-  /** Motto, intro text and actions, rendered at the bottom of the hero. */
+  /** Wordmark, motto, intro text and actions: the main message. Stamps never start on it. */
+  copy: ReactNode;
+  /** Compact rails row along the bottom of the hero. */
   foot: ReactNode;
 };
 
-export default function Trail({ top, foot }: TrailProps) {
+export default function Trail({ copy, foot }: TrailProps) {
   const heroRef = useRef<HTMLDivElement>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
   const playRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const hero = heroRef.current;
+    const text = copyRef.current;
+    const stage = stageRef.current;
     const layer = layerRef.current;
     const replay = playRef.current;
-    if (!hero || !layer || !replay) return;
+    if (!hero || !text || !stage || !layer || !replay) return;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     const timers = new Set<number>();
@@ -62,21 +72,40 @@ export default function Trail({ top, foot }: TrailProps) {
     let preloaded: HTMLImageElement[] = [];
     let quiet = false;
     let playingUntil = 0;
+    let size: [width: number, height: number] | null = null;
 
-    // True when the pointer is on, or within QUIET_PAD of, any link or button in the hero.
-    const nearInteractive = (clientX: number, clientY: number) =>
-      Array.from(hero.querySelectorAll<HTMLElement>("a, button")).some((el) => {
+    // Stamp size comes from CSS (.stamp); measured once with a hidden probe, again after a resize.
+    const stampSize = () => {
+      if (!size) {
+        const probe = document.createElement("div");
+        probe.className = "stamp";
+        probe.style.visibility = "hidden";
+        layer.append(probe);
+        size = [probe.offsetWidth, probe.offsetHeight];
+        probe.remove();
+      }
+      return size;
+    };
+    const onResize = () => {
+      size = null;
+    };
+
+    const near = (b: DOMRect, x: number, y: number, padX: number, padY: number) =>
+      x >= b.left - padX && x <= b.right + padX && y >= b.top - padY && y <= b.bottom + padY;
+
+    // True when a stamp centred on the pointer would overlap the hero copy, or when the pointer is
+    // on, or within QUIET_PAD of, any link or button in the hero.
+    const nearInteractive = (clientX: number, clientY: number) => {
+      const [w, h] = stampSize();
+      if (near(text.getBoundingClientRect(), clientX, clientY, w / 2 + COPY_PAD, h / 2 + COPY_PAD)) return true;
+      return Array.from(hero.querySelectorAll<HTMLElement>("a, button")).some((el) => {
         const b = el.getBoundingClientRect();
         if (!b.width && !b.height) return false;
-        return (
-          clientX >= b.left - QUIET_PAD &&
-          clientX <= b.right + QUIET_PAD &&
-          clientY >= b.top - QUIET_PAD &&
-          clientY <= b.bottom + QUIET_PAD
-        );
+        return near(b, clientX, clientY, QUIET_PAD, QUIET_PAD);
       });
+    };
 
-    // Fade existing stamps out (CSS .trail-quiet) while the pointer is aiming at a control.
+    // Fade existing stamps out (CSS .trail-quiet) while the pointer is aiming at the copy or a control.
     const setQuiet = (next: boolean) => {
       if (next === quiet) return;
       quiet = next;
@@ -170,15 +199,19 @@ export default function Trail({ top, foot }: TrailProps) {
       stamp(x, y);
     };
 
+    // The scripted path stays inside the stage, so it never covers the copy either.
     const play = () => {
       stopAuto();
       warm();
       const r = hero.getBoundingClientRect();
+      const s = stage.getBoundingClientRect();
       const poses = reduced.matches ? STILL_PATH : PATH;
       setQuiet(false);
       playingUntil = performance.now() + poses.length * 165 + LIFE_MS;
       poses.forEach(([px, py], i) => {
-        auto.push(later(() => stamp(px * r.width, py * r.height), i * 165));
+        const x = s.left - r.left + px * s.width;
+        const y = s.top - r.top + py * s.height;
+        auto.push(later(() => stamp(x, y), i * 165));
       });
     };
 
@@ -206,6 +239,7 @@ export default function Trail({ top, foot }: TrailProps) {
     hero.addEventListener("pointerleave", onLeave);
     replay.addEventListener("click", play);
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("resize", onResize);
 
     return () => {
       hero.removeEventListener("pointerenter", warm);
@@ -214,6 +248,7 @@ export default function Trail({ top, foot }: TrailProps) {
       hero.removeEventListener("pointerleave", onLeave);
       replay.removeEventListener("click", play);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("resize", onResize);
       for (const id of timers) window.clearTimeout(id);
       timers.clear();
       layer.replaceChildren();
@@ -223,21 +258,23 @@ export default function Trail({ top, foot }: TrailProps) {
 
   return (
     <div ref={heroRef} className="wrap hero-inner">
-      {top}
-      <div className="stage" aria-hidden="true">
-        <div className="intro-card">
+      <div ref={copyRef} className="hero-copy">
+        {copy}
+      </div>
+      <div ref={stageRef} className="stage">
+        <div className="intro-card" aria-hidden="true">
           <img src={`${BASE}concert.webp`} alt="" width={800} height={600} />
           <span>01 / Your next show</span>
         </div>
+        <div className="experiment">
+          <button ref={playRef} type="button">
+            <i aria-hidden="true" />
+            <span>Play the trail</span>
+          </button>
+          <span className="hint">or move your cursor</span>
+        </div>
       </div>
       <div ref={layerRef} className="trail" aria-hidden="true" />
-      <div className="experiment">
-        <button ref={playRef} type="button">
-          <i aria-hidden="true" />
-          <span>Play the trail</span>
-        </button>
-        <span className="hint">or move your cursor</span>
-      </div>
       {foot}
     </div>
   );
