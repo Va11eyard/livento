@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import ui from "@/components/app/ui.module.css";
-import { errorMessage, subscribeAlerts } from "@/lib/client-api";
-import type { Profile } from "@/lib/types";
+import { errorMessage, getHealth, subscribeAlerts } from "@/lib/client-api";
+import type { IntegrationStatus, Profile } from "@/lib/types";
 import styles from "./discover.module.css";
 
 type Result = { tone: "ok" | "info" | "error"; text: string; telegramUrl?: string };
@@ -21,12 +21,30 @@ function safeTelegramUrl(url: string | undefined): string | undefined {
   }
 }
 
-/** FR-5: subscribe to new matching events by email or Telegram. Shows the API's message as-is when alerts aren't configured. */
+/**
+ * FR-5: subscribe to new matching events by email or Telegram. Only channels that are
+ * actually connected on this deployment are shown; with none connected the box is hidden,
+ * so there is never a button that leads nowhere.
+ */
 export function AlertsBox({ profile }: { profile: Profile }) {
   const id = useId();
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState<null | "email" | "telegram">(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [channels, setChannels] = useState<{ email: boolean; telegram: boolean } | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getHealth(controller.signal)
+      .then((health) => {
+        const live = (key: IntegrationStatus["key"]) =>
+          health.integrations.some((i) => i.key === key && i.state === "live");
+        const storage = live("storage");
+        setChannels({ email: storage && live("email"), telegram: storage && live("telegram") });
+      })
+      .catch(() => setChannels({ email: false, telegram: false }));
+    return () => controller.abort();
+  }, []);
 
   async function subscribe(channel: "email" | "telegram") {
     if (channel === "email" && !EMAIL_RE.test(email.trim())) {
@@ -65,8 +83,10 @@ export function AlertsBox({ profile }: { profile: Profile }) {
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    void subscribe("email");
+    if (channels?.email) void subscribe("email");
   };
+
+  if (!channels || (!channels.email && !channels.telegram)) return null;
 
   return (
     <section className={`${ui.panel} ${styles.alerts}`} aria-labelledby={`${id}-title`}>
@@ -75,34 +95,40 @@ export function AlertsBox({ profile }: { profile: Profile }) {
           Get alerts for new matches
         </h2>
         <p className={ui.meta}>
-          Free. We check daily for new events that match your interests in {profile.city}. Your email is used only for
-          these alerts.
+          Free. We check daily for new events that match your interests in {profile.city}.
+          {channels.email ? " Your email is used only for these alerts." : ""}
         </p>
       </div>
       <form className={styles.alertsForm} onSubmit={onSubmit} noValidate>
-        <div className="field">
-          <label htmlFor={`${id}-email`}>Email</label>
-          <input
-            id={`${id}-email`}
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </div>
+        {channels.email ? (
+          <div className="field">
+            <label htmlFor={`${id}-email`}>Email</label>
+            <input
+              id={`${id}-email`}
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+        ) : null}
         <div className={ui.actions}>
-          <button type="submit" className="pill" disabled={pending !== null}>
-            {pending === "email" ? "Subscribing…" : "Email me matches"}
-          </button>
-          <button
-            type="button"
-            className="pill alt"
-            disabled={pending !== null}
-            onClick={() => void subscribe("telegram")}
-          >
-            {pending === "telegram" ? "Connecting…" : "Alerts on Telegram"}
-          </button>
+          {channels.email ? (
+            <button type="submit" className="pill" disabled={pending !== null}>
+              {pending === "email" ? "Subscribing…" : "Email me matches"}
+            </button>
+          ) : null}
+          {channels.telegram ? (
+            <button
+              type="button"
+              className={channels.email ? "pill alt" : "pill"}
+              disabled={pending !== null}
+              onClick={() => void subscribe("telegram")}
+            >
+              {pending === "telegram" ? "Connecting…" : "Alerts on Telegram"}
+            </button>
+          ) : null}
         </div>
       </form>
       <div aria-live="polite" className={styles.alertsResult}>

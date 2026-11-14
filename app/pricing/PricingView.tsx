@@ -9,7 +9,7 @@ import { PREMIUM_FEATURES } from "@/components/app/PremiumGate";
 import { Notice } from "@/components/app/States";
 import { useToast } from "@/components/app/Toast";
 import ui from "@/components/app/ui.module.css";
-import { checkout, errorMessage } from "@/lib/client-api";
+import { checkout, errorMessage, getHealth } from "@/lib/client-api";
 import { setPremium, useAppState, useHydrated } from "@/lib/storage";
 import { PRICING } from "@/lib/types";
 import styles from "./pricing.module.css";
@@ -38,6 +38,16 @@ export function PricingView() {
   const [billing, setBilling] = useState<Billing>("monthly");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ tone: "info" | "error"; text: string } | null>(null);
+  // Show the checkout button only when test-mode payments are actually connected on this deployment.
+  const [checkoutLive, setCheckoutLive] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getHealth(controller.signal)
+      .then((h) => setCheckoutLive(h.integrations.some((i) => i.key === "payments" && i.state === "test")))
+      .catch(() => setCheckoutLive(false));
+    return () => controller.abort();
+  }, []);
 
   // Returning from the test-mode checkout: unlock and drop the query so a reload doesn't repeat it.
   useEffect(() => {
@@ -184,15 +194,25 @@ export function PricingView() {
             ))}
           </ul>
           <div className={styles.planActions}>
-            <button type="button" className="pill" onClick={() => void upgrade()} disabled={pending}>
-              {pending ? "Opening checkout…" : `Upgrade for ${usd(price)} (test checkout)`} <span aria-hidden="true">↗</span>
-            </button>
-            <button type="button" className="pill alt" onClick={demoUnlock} disabled={premium !== "none"}>
+            {checkoutLive ? (
+              <button type="button" className="pill" onClick={() => void upgrade()} disabled={pending}>
+                {pending ? "Opening checkout…" : `Upgrade for ${usd(price)} (test checkout)`} <span aria-hidden="true">↗</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={checkoutLive ? "pill alt" : "pill"}
+              onClick={demoUnlock}
+              disabled={premium !== "none"}
+            >
               Demo unlock (no charge) <span aria-hidden="true">●</span>
             </button>
           </div>
           <p className={styles.fine}>
-            Cancel anytime in one click. No hidden renewals. Test mode: no real card is charged.
+            Cancel anytime in one click. No hidden renewals.{" "}
+            {checkoutLive
+              ? "Test mode: no real card is charged."
+              : "Payments aren't connected in this demo, so Premium unlocks for free."}
           </p>
         </section>
       </div>
