@@ -37,6 +37,9 @@ export async function POST(request: Request) {
     "line_items[0][price_data][product_data][description]":
       "Test mode — no real charge. Livento wallet with automatic weekly saving, spend-vs-save comparator, trip roadmap and spending breakdown.",
     "metadata[app]": "livento-premium",
+    // USD only and an English page, wherever the visitor is (no Adaptive Pricing conversion).
+    "adaptive_pricing[enabled]": "false",
+    locale: "en",
     "subscription_data[metadata][app]": "livento",
   });
 

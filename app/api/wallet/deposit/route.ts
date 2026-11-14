@@ -33,6 +33,10 @@ export async function POST(request: Request) {
       mode: "payment",
       customer: auth.customerId,
       payment_method_types: ["card"],
+      // Always charge in USD: with Adaptive Pricing a visitor abroad (e.g. judges in Astana) would
+      // pay in local currency, and the wallet ledger only counts USD payments.
+      adaptive_pricing: { enabled: false },
+      locale: "en",
       line_items: [
         {
           quantity: 1,
