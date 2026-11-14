@@ -3,15 +3,16 @@
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { safeExternalUrl, usd } from "@/components/app/format";
 import { PREMIUM_FEATURES } from "@/components/app/PremiumGate";
 import { Notice } from "@/components/app/States";
 import { useToast } from "@/components/app/Toast";
 import ui from "@/components/app/ui.module.css";
-import { checkout, errorMessage, getHealth } from "@/lib/client-api";
-import { setPremium, useAppState, useHydrated } from "@/lib/storage";
+import { checkout, checkoutSession, ClientApiError, errorMessage, getHealth, stopAllAutosaves } from "@/lib/client-api";
+import { setPremium, syncEnvelopeLedger, useAppState, useHydrated } from "@/lib/storage";
 import { PRICING } from "@/lib/types";
+import { GoodbyeDialog } from "./GoodbyeDialog";
 import styles from "./pricing.module.css";
 
 type Billing = "monthly" | "yearly";
@@ -31,10 +32,14 @@ export function PricingView() {
   const state = useAppState();
   const hydrated = useHydrated();
   const checkoutParam = params.get("checkout");
+  const sessionParam = params.get("session_id");
   // Remember why we arrived even after the URL is cleaned up.
-  const [arrival] = useState<"success" | "cancel" | null>(
-    checkoutParam === "success" || checkoutParam === "cancel" ? checkoutParam : null,
+  const [arrival, setArrival] = useState<"confirming" | "success" | "unpaid" | "cancel" | null>(
+    checkoutParam === "cancel" ? "cancel" : checkoutParam === "success" && sessionParam ? "confirming" : null,
   );
+  const [turnOffError, setTurnOffError] = useState<string | null>(null);
+  const [turnedOff, setTurnedOff] = useState(false);
+  const handledReturn = useRef(false);
   const [billing, setBilling] = useState<Billing>("monthly");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ tone: "info" | "error"; text: string } | null>(null);
@@ -49,12 +54,25 @@ export function PricingView() {
     return () => controller.abort();
   }, []);
 
-  // Returning from the test-mode checkout: unlock and drop the query so a reload doesn't repeat it.
+  // Returning from the test-mode checkout: check with Stripe that the session was really paid before
+  // unlocking, then drop the query so a reload doesn't repeat it. Runs once per arrival.
   useEffect(() => {
-    if (checkoutParam !== "success" && checkoutParam !== "cancel") return;
-    if (checkoutParam === "success") setPremium("paid");
+    if (handledReturn.current || (checkoutParam !== "success" && checkoutParam !== "cancel")) return;
+    handledReturn.current = true;
     router.replace("/pricing", { scroll: false });
-  }, [checkoutParam, router]);
+    if (checkoutParam !== "success" || !sessionParam) return;
+    const sessionId = sessionParam;
+    checkoutSession({ sessionId, action: "confirm" })
+      .then((res) => {
+        if (res.ok && res.paid) {
+          setPremium("paid", sessionId);
+          setArrival("success");
+        } else {
+          setArrival("unpaid");
+        }
+      })
+      .catch(() => setArrival("unpaid"));
+  }, [checkoutParam, sessionParam, router]);
 
   const premium = hydrated ? state.premium : "none";
   const hasProfile = hydrated && !!state.profile;
@@ -63,6 +81,7 @@ export function PricingView() {
   const demoUnlock = () => {
     setPremium("demo");
     setMessage(null);
+    setTurnedOff(false);
     notify("Premium demo unlocked", "No charge. Turn it off here anytime.");
   };
 
@@ -90,9 +109,43 @@ export function PricingView() {
     setPending(false);
   };
 
-  const turnOff = () => {
+  /**
+   * Stops every auto-save first (auto-save is a Premium feature), then cancels the test subscription
+   * if Premium was bought, so "nothing renews" and "auto-save stops" stay true. Money in the wallet
+   * stays there; withdrawing never needs Premium.
+   */
+  const turnOff = async (): Promise<boolean> => {
+    setTurnOffError(null);
+    const token = state.wallet?.token;
+    if (token) {
+      try {
+        syncEnvelopeLedger(await stopAllAutosaves(token));
+      } catch (err) {
+        // 503: payments aren't connected here, so nothing can be withdrawn anyway.
+        // 401/404: the wallet link is gone, so there is no schedule left to stop.
+        const nothingToStop = err instanceof ClientApiError && [401, 404, 503].includes(err.status);
+        if (!nothingToStop) {
+          setTurnOffError(`${errorMessage(err)} Auto-save is still on, so Premium stays on for now.`);
+          return false;
+        }
+      }
+    }
+    if (state.premium === "paid" && state.premiumSession) {
+      try {
+        const res = await checkoutSession({ sessionId: state.premiumSession, action: "cancel" });
+        if (!res.ok || !res.canceled) {
+          setTurnOffError(res.message || "We couldn't cancel the test subscription, so Premium stays on. Please try again.");
+          return false;
+        }
+      } catch (err) {
+        setTurnOffError(`${errorMessage(err)} Premium stays on for now.`);
+        return false;
+      }
+    }
     setPremium("none");
-    notify("Premium is off", "Nothing else to cancel, and nothing renews.");
+    setTurnedOff(true);
+    setArrival(null);
+    return true;
   };
 
   return (
@@ -101,12 +154,21 @@ export function PricingView() {
         <p className="kicker">05 / Pricing</p>
         <h1 className="title">Plan for free. Save with Premium.</h1>
         <p className="lead muted">
-          Events, picks and alerts are free. Premium adds the planning tools. The price is shown before checkout, and
-          you can cancel in one click.
+          Events, picks and alerts are free. Premium adds the wallet that saves for you automatically, plus the
+          planning tools. The price is shown before checkout, and you can cancel in one click.
         </p>
       </header>
 
       <div className={styles.notices} aria-live="polite">
+        {arrival === "confirming" ? <Notice label="Checking your checkout">One moment…</Notice> : null}
+        {arrival === "unpaid" ? (
+          <Notice tone="error" label="Checkout not confirmed">
+            We couldn&rsquo;t confirm this payment, so Premium stays off. You can try again or use Demo unlock.
+          </Notice>
+        ) : null}
+        {turnedOff && premium === "none" ? (
+          <Notice label="Premium is off">Nothing renews. You can turn it back on anytime.</Notice>
+        ) : null}
         {arrival === "success" ? (
           <Notice tone="ok" label="Premium unlocked">
             Thanks for trying it. This is test mode, so no real money was charged.
@@ -127,9 +189,7 @@ export function PricingView() {
               {premium === "demo" ? "is on as a free demo unlock." : "is on (test mode)."} Turning it off takes one
               click and nothing renews.
             </p>
-            <button type="button" className="pill small alt" onClick={turnOff}>
-              Turn off Premium
-            </button>
+            <GoodbyeDialog onTurnOff={turnOff} error={turnOffError} />
           </div>
         ) : null}
       </div>
@@ -228,16 +288,27 @@ export function PricingView() {
           </div>
           <div>
             <dt>Cancelling</dt>
-            <dd>One click on this page turns Premium off. Nothing renews behind your back.</dd>
+            <dd>
+              One click on this page turns Premium off and cancels the test subscription, so nothing renews behind your
+              back.
+            </dd>
           </div>
           <div>
             <dt>Your money</dt>
-            <dd>Livento never holds or moves your money. Envelopes only track what you set aside in your own bank.</dd>
+            <dd>
+              Money you add goes into your Livento wallet, one envelope per goal, and stays there until you withdraw
+              it back to your card.{" "}
+              {checkoutLive
+                ? "This demo runs the wallet in Stripe test mode, so no real money moves."
+                : "Payments aren't connected on this deployment yet, so the wallet can't take money."}
+            </dd>
           </div>
           <div>
             <dt>Your data</dt>
             <dd>
-              Your profile and envelopes live in this browser. Bank CSVs are processed in memory and never stored.
+              Your profile, goals and spending summary are saved in this browser, and there&rsquo;s no account. Wallet
+              payments go through Stripe, and your wallet is linked to this browser. A bank statement you upload is
+              read once to build your summary; the file itself isn&rsquo;t kept.
             </dd>
           </div>
         </dl>

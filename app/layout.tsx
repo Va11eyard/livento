@@ -11,7 +11,7 @@ const siteUrl =
 
 const title = "Livento — Spend on memories, not impulses";
 const description =
-  "Livento finds concerts, shows, festivals and big experiences you'll love, shows the full cost, and helps you set money aside so impulse buys turn into memories.";
+  "Livento finds concerts, shows, festivals and big experiences you'll love, shows the full cost, and saves for them automatically in your Livento wallet.";
 
 // Icons come from the app/ file conventions: favicon.ico, icon.svg, apple-icon.png.
 // Share images come from app/opengraph-image.png and app/twitter-image.png.

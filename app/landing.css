@@ -421,6 +421,42 @@
   color: var(--ink-soft);
 }
 
+/* "Go" is the destination: a filled marker. */
+.lv-landing .roadmap li:last-child::before {
+  background: var(--ink);
+}
+
+/* Desktop: one track runs the full width and ends in an arrow, so the row doesn't stop short. */
+@media (min-width: 768px) {
+  .lv-landing .roadmap {
+    position: relative;
+  }
+
+  .lv-landing .roadmap::before {
+    content: "";
+    position: absolute;
+    top: calc(var(--dot) / 2 - 0.5px);
+    left: 0;
+    right: 9px;
+    height: 1px;
+    background: var(--ink);
+  }
+
+  .lv-landing .roadmap::after {
+    content: "";
+    position: absolute;
+    top: calc(var(--dot) / 2 - 5px);
+    right: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 10px solid var(--ink);
+  }
+
+  .lv-landing .roadmap li:not(:last-child)::after {
+    display: none;
+  }
+}
+
 .lv-landing .end {
   display: flex;
   align-items: center;

@@ -3,6 +3,7 @@ import { json } from "@/lib/http";
 import { isKvConfigured } from "@/lib/kv";
 import { isLlmConfigured } from "@/lib/llm";
 import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
+import { stripeTestKey } from "@/lib/stripe";
 import { hasTicketmasterKey } from "@/lib/ticketmaster";
 import type { HealthResponse, IntegrationStatus } from "@/lib/types";
 
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   const limited = await rateLimit(request, "health", RATE_LIMITS.general);
   if (limited) return limited;
 
-  const stripeTestKey = /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY?.trim() ?? "");
+  const stripeTest = stripeTestKey() !== null; // same rule as before: sk_test_ / rk_test_ only
 
   const integrations: IntegrationStatus[] = [
     hasTicketmasterKey()
@@ -30,18 +31,27 @@ export async function GET(request: Request) {
           state: "sample",
           detail: "No API key: Discover shows labeled, fictional sample events plus curated experiences.",
         },
+    {
+      key: "sports",
+      name: "Live sports (TheSportsDB)",
+      state: "live",
+      detail: hasTicketmasterKey()
+        ? "Backup for sports: real upcoming NBA, NFL, MLB, NHL and MLS games near the user when Ticketmaster is unavailable. Free public API; no prices, so ticket prices are labeled estimates."
+        : "Real upcoming NBA, NFL, MLB, NHL and MLS games near the user. Free public API; no prices, so ticket prices are labeled estimates.",
+    },
     isLlmConfigured()
       ? {
           key: "ai",
           name: "AI wording",
           state: "live",
-          detail: "Re-ranks picks and writes the \"why this\" lines and roadmap text. Prices and dates always come from data.",
+          detail:
+            "Answers in Ask Livento, re-ranks picks and writes the \"why this\" lines and roadmap text. Numbers always come from Livento's calculators.",
         }
       : {
           key: "ai",
           name: "AI wording",
           state: "off",
-          detail: "No API key: picks keep the rule-based order and template text.",
+          detail: "No API key: Ask Livento says it isn't connected, and picks keep the rule-based order and template text.",
         },
     isKvConfigured()
       ? {
@@ -84,7 +94,7 @@ export async function GET(request: Request) {
           state: "off",
           detail: "Email API key or sender not set.",
         },
-    stripeTestKey
+    stripeTest
       ? {
           key: "payments",
           name: "Checkout",
@@ -96,6 +106,20 @@ export async function GET(request: Request) {
           name: "Checkout",
           state: "demo",
           detail: "Payments not connected: Premium uses a free demo unlock.",
+        },
+    stripeTest
+      ? {
+          key: "wallet",
+          name: "Livento wallet",
+          state: "test",
+          detail:
+            "Add money by card, automatic weekly withdrawals, and withdrawals back to the card. Stripe test mode: no real money moves.",
+        }
+      : {
+          key: "wallet",
+          name: "Livento wallet",
+          state: "off",
+          detail: "No Stripe test key: the wallet can't take money yet.",
         },
     process.env.CRON_SECRET?.trim()
       ? {

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const origin = siteOrigin(request);
   const form = new URLSearchParams({
     mode: "subscription",
-    success_url: `${origin}/pricing?checkout=success`,
+    success_url: `${origin}/pricing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/pricing?checkout=cancel`,
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": PRICING.currency.toLowerCase(),
@@ -35,7 +35,8 @@ export async function POST(request: Request) {
     "line_items[0][price_data][recurring][interval]": yearly ? "year" : "month",
     "line_items[0][price_data][product_data][name]": `Livento Premium (${yearly ? "yearly" : "monthly"})`,
     "line_items[0][price_data][product_data][description]":
-      "Test mode — no real charge. Savings envelopes, spend-vs-save comparator, trip roadmap and impulse insights.",
+      "Test mode — no real charge. Livento wallet with automatic weekly saving, spend-vs-save comparator, trip roadmap and spending breakdown.",
+    "metadata[app]": "livento-premium",
     "subscription_data[metadata][app]": "livento",
   });
 

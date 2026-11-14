@@ -34,7 +34,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   experiences: "Big experiences",
 };
 
-export type EventSource = "ticketmaster" | "curated" | "sample";
+export type EventSource = "ticketmaster" | "thesportsdb" | "curated" | "sample";
 
 export interface Presale {
   name: string;
@@ -44,7 +44,7 @@ export interface Presale {
 
 /** One thing a user can go to. Named LiventoEvent to avoid clashing with DOM `Event`. */
 export interface LiventoEvent {
-  id: string; // stable, prefixed by source: "tm_<id>", "cur_<slug>", "smp_<slug>"
+  id: string; // stable, prefixed by source: "tm_<id>", "tsdb_<idEvent>", "cur_<slug>", "smp_<slug>"
   source: EventSource;
   name: string;
   category: Category;
@@ -97,10 +97,15 @@ export interface Profile {
 
 export interface Deposit {
   date: string; // ISO date
-  amount: number; // USD, positive = set aside, negative = withdrawn
+  amount: number; // USD, positive = added to the wallet, negative = withdrawn to the card
+  kind?: WalletEntryKind; // set on entries synced from the wallet ledger
+  ref?: string; // Stripe object id (pi_… / re_…); only entries with a ref count toward the balance
 }
 
-/** A virtual envelope. Money never leaves the user's own bank; this only tracks it. */
+/**
+ * A goal's envelope in the Livento wallet. Money is held through Stripe (test mode);
+ * `deposits` mirror the Stripe ledger and are replaced by syncEnvelopeLedger().
+ */
 export interface Envelope {
   id: string;
   eventId: string;
@@ -119,8 +124,50 @@ export interface AppState {
   envelopes: Envelope[];
   savedEvents: Record<string, LiventoEvent>; // events the user opened/liked/saved, so detail pages work offline
   premium: PremiumState;
+  premiumSession?: string; // Stripe Checkout Session id of a test-mode Premium purchase (lets "Turn off" cancel it)
   anonId: string; // random id for anonymous interaction logging (FR-14)
+  wallet?: WalletLink; // Livento wallet linked to this browser (no account)
+  insights?: InsightsSummary; // spending summary from /insights (never the raw file)
+  social?: ProfileSocial; // name, bio, quote and cover for /profile (photos live under PROFILE_MEDIA_KEY)
 }
+
+/** The browser's link to its Livento wallet: "<cus id>.<HMAC>", sent only in POST bodies. */
+export interface WalletLink {
+  token: string;
+  createdAt: string; // ISO datetime
+}
+
+// ---------------------------------------------------------------------------
+// Social profile (/profile). No accounts: saved in this browser only.
+// ---------------------------------------------------------------------------
+
+/** Local cover images (public/assets/trail/<id>.webp). */
+export const COVER_PRESETS = ["concert", "theatre", "festival", "cinema"] as const;
+export type CoverPreset = (typeof COVER_PRESETS)[number];
+/** "auto" follows the top interest; "photo" uses the uploaded cover in ProfileMedia. */
+export type CoverChoice = "auto" | CoverPreset | "photo";
+
+export interface ProfileQuote {
+  text: string;
+  source: "curated" | "custom" | "ai";
+  index?: number; // position in QUOTES (lib/quotes.ts) when source is "curated"
+}
+
+export interface ProfileSocial {
+  displayName: string; // "" until the user adds one
+  bio: string; // at most PROFILE_LIMITS.bio characters
+  quote?: ProfileQuote; // undefined until the user picks one (a curated line is shown)
+  cover: CoverChoice;
+}
+
+/** Profile photos as JPEG data URLs, stored under PROFILE_MEDIA_KEY so AppState stays small. */
+export interface ProfileMedia {
+  avatar?: string; // 256×256
+  cover?: string; // 1500×500
+}
+
+export const PROFILE_LIMITS = { name: 60, bio: 160, quote: 140 } as const;
+export const PROFILE_MEDIA_KEY = "livento:profile-media";
 
 // ---------------------------------------------------------------------------
 // Cost plan (FR-6, FR-7)
@@ -252,33 +299,35 @@ export interface RoadmapResponse {
   writer: "llm" | "template";
 }
 
-// POST /api/insights  (CSV is read in the browser and sent as text; never stored)
-export interface InsightsGoal {
-  envelopeId?: string;
-  eventName: string;
-  target: number; // USD
-}
+// POST /api/insights  (the CSV is read in the browser, sent as text, parsed in
+// memory on the server and discarded; only the summary is kept, in the browser)
 export interface InsightsRequest {
   csv?: string; // raw CSV text, max 1 MB
   sample?: boolean; // true = use data/sample-statement.csv
-  goals: InsightsGoal[];
 }
+/** One calendar month of spending (income and transfers left out). */
 export interface InsightsMonth {
   month: string; // "YYYY-MM"
+  days: number; // days of this month the statement covers; fewer than the month has = partial month
   spendTotal: number; // USD
-  impulseTotal: number; // USD
-  byCategory: Record<string, number>; // USD per category
-  topMerchants: { name: string; amount: number; count: number }[];
+  count: number; // purchases
+  byCategory: Record<string, number>; // USD per spending category
+  topMerchants: { name: string; amount: number; count: number }[]; // up to 10 by amount; bills & rent left out
 }
 export interface InsightsResponse {
-  months: InsightsMonth[];
-  impulseTotal: number; // USD across all months
-  monthlyImpulseAverage: number; // USD
-  equivalents: { envelopeId?: string; eventName: string; target: number; coveredPct: number }[];
+  months: InsightsMonth[]; // oldest first, at most 36
   rowsParsed: number;
   classifier: "rules" | "rules+llm";
   isSample: boolean;
   warnings: string[];
+}
+/** The analysis summary kept in AppState: never the file. Uploads merge by month (the newer copy of a month wins). */
+export interface InsightsSummary {
+  version: 1;
+  source: "sample" | "upload";
+  analyzedAt: string; // ISO datetime of the latest analysis merged in
+  classifier: "rules" | "rules+llm"; // "rules+llm" if any merged analysis used AI for unknown merchants
+  months: InsightsMonth[]; // oldest first, at most 36
 }
 
 // POST /api/alerts
@@ -297,6 +346,18 @@ export interface AlertSubscribeResponse {
   telegramStartUrl?: string; // https://t.me/<bot>?start=<id>
 }
 
+// POST /api/quote  (profile "About my goals")
+export interface QuoteRequest {
+  goals: string[]; // envelope event names, up to 5
+  interests: string[]; // Category keys
+  city?: string;
+  name?: string;
+}
+export interface QuoteResponse {
+  text: string;
+  source: "ai" | "curated"; // "curated" when the AI is off or failed (a line from lib/quotes.ts)
+}
+
 // POST /api/checkout
 export interface CheckoutRequest {
   plan: "monthly" | "yearly";
@@ -307,6 +368,87 @@ export interface CheckoutResponse {
   message?: string;
 }
 
+// POST /api/checkout/session — confirm a finished Premium test checkout, or cancel its subscription
+export interface CheckoutSessionRequest {
+  sessionId: string; // cs_test_… from the success URL
+  action: "confirm" | "cancel";
+}
+export interface CheckoutSessionResponse {
+  ok: boolean;
+  paid?: boolean; // confirm: the session is complete and paid
+  canceled?: boolean; // cancel: the subscription is canceled (or already was)
+  message?: string;
+}
+
+// Livento wallet (Stripe TEST MODE only). Every route is POST and takes the wallet
+// token in the JSON body, never in the URL. Amounts are USD.
+// POST /api/wallet            {}                                   → WalletCreateResponse
+// POST /api/wallet/summary    WalletTokenRequest                   → WalletSummary
+// POST /api/wallet/deposit    WalletDepositRequest                 → WalletDepositResponse (Stripe Checkout URL)
+// POST /api/wallet/confirm    WalletConfirmRequest                 → WalletConfirmResponse (summary + confirmed)
+// POST /api/wallet/withdraw   WalletWithdrawRequest                → WalletSummary
+// POST /api/wallet/autosave   WalletAutosaveRequest                → WalletSummary
+export type WalletEntryKind = "deposit" | "autosave" | "withdrawal";
+export interface WalletEntry {
+  id: string; // Stripe PaymentIntent (pi_…) or Refund (re_…) id
+  date: string; // ISO datetime (UTC) the money moved
+  amount: number; // USD, positive = added, negative = withdrawn to the card
+  kind: WalletEntryKind;
+}
+export interface WalletAutosave {
+  weekly: number; // USD per week
+  nextDate: string; // ISO date (UTC) of the next automatic withdrawal
+  status: "active" | "failed";
+}
+export interface WalletEnvelope {
+  balance: number; // USD
+  eventName?: string; // from the newest payment, for money whose envelope isn't in this browser
+  entries: WalletEntry[]; // oldest first
+  autosave?: WalletAutosave;
+}
+export interface WalletSummary {
+  testMode: true;
+  total: number; // USD across all envelopes
+  envelopes: Record<string, WalletEnvelope>; // keyed by envelope id
+}
+export interface WalletCreateResponse {
+  token: string;
+}
+export interface WalletTokenRequest {
+  token: string;
+}
+export interface WalletDepositRequest {
+  token: string;
+  envelopeId: string;
+  eventName: string;
+  amount: number; // USD 1–2000; with autosave this is the weekly amount and the first withdrawal
+  target: number; // USD goal; auto-save stops once the envelope reaches it
+  autosave?: boolean; // save the card and withdraw `amount` every week
+}
+export interface WalletDepositResponse {
+  url: string; // Stripe Checkout (test mode)
+}
+export interface WalletConfirmRequest {
+  token: string;
+  sessionId: string; // cs_… from the success URL
+}
+export interface WalletConfirmResponse extends WalletSummary {
+  confirmed?: { envelopeId: string; amount: number; autosave: boolean }; // the payment that was just confirmed
+}
+export interface WalletWithdrawRequest {
+  token: string;
+  envelopeId: string;
+  amount?: number; // USD 1–2000; omitted = the whole envelope balance
+  requestId?: string; // same id for retries of one withdrawal, so it never refunds twice
+}
+export interface WalletAutosaveRequest {
+  token: string;
+  envelopeId: string; // or "*" with weekly null = stop every auto-save
+  weekly: number | null; // null stops; a number changes the weekly amount of an existing schedule
+}
+export const WALLET_MIN_AMOUNT = 1;
+export const WALLET_MAX_AMOUNT = 2000;
+
 // POST /api/log  (FR-14, anonymous)
 export type InteractionAction = "open" | "like" | "skip" | "save";
 export interface LogRequest {
@@ -315,10 +457,82 @@ export interface LogRequest {
   action: InteractionAction;
 }
 
+// POST /api/assistant  (Ask Livento chat; GET /api/assistant → AssistantStatusResponse)
+// The browser sends the conversation (kept in sessionStorage) plus a summary of
+// its AppState. Every number in an answer comes from Livento's calculators via
+// tools, and every action link is built by the server, never by the model.
+export interface AssistantChatMessage {
+  role: "user" | "assistant";
+  content: string; // ≤ 2,000 characters
+}
+/** The parts of the Profile the helper's calculators use. */
+export interface AssistantProfileSummary {
+  city: string;
+  stateCode?: string;
+  lat?: number;
+  lng?: number;
+  radiusMiles?: number;
+  interests: Category[];
+  favourites: string[];
+  monthlyFunBudget?: number; // USD
+  hotelPerNight?: number; // USD
+  travelPerTrip?: number; // USD
+  vacationDaysLeft?: number;
+  preferredMonths?: number[]; // 1-12
+  isSample?: boolean;
+}
+export interface AssistantEnvelope {
+  id: string;
+  eventId: string;
+  eventName: string;
+  eventDate?: string; // ISO date
+  target: number; // USD
+  balance: number; // USD, envelopeBalance()
+  deadline: string; // ISO date
+}
+/** Category monthly averages from AppState.insights (app/insights/plan.ts categoryTotals). */
+export interface AssistantSpending {
+  source: "sample" | "upload";
+  days: number; // days the saved statements cover
+  monthlyAverage?: number; // USD
+  categories: { name: string; perMonth: number }[]; // largest first
+}
+export interface AssistantContext {
+  today?: string; // the browser's ISO date
+  profile?: AssistantProfileSummary;
+  envelopes: AssistantEnvelope[];
+  walletTotal?: number; // USD across envelopes (totalSetAside)
+  spending?: AssistantSpending;
+  currentEventId?: string; // when asked from /event/[id] or /roadmap/[id]
+}
+export interface AssistantRequest {
+  messages: AssistantChatMessage[]; // ≤ 20, the last one from the user
+  context?: AssistantContext;
+}
+/** A button under an answer. `href` is "/path" (in-app) or an https:// search link (external). */
+export interface AssistantAction {
+  label: string;
+  href: string;
+  external: boolean;
+}
+export interface AssistantAnswer {
+  off?: false;
+  text: string; // plain text: sentences and "- " bullets
+  actions: AssistantAction[];
+  usedTools: string[];
+}
+/** No ANTHROPIC_API_KEY on this deployment: the UI says so and hides the input. */
+export interface AssistantOff {
+  off: true;
+  message: string;
+}
+export type AssistantResponse = AssistantAnswer | AssistantOff;
+export type AssistantStatusResponse = { off: false } | AssistantOff;
+
 // GET /api/health  (configuration only — never returns key values)
 export type IntegrationState = "live" | "sample" | "off" | "test" | "demo";
 export interface IntegrationStatus {
-  key: "events" | "ai" | "storage" | "telegram" | "email" | "payments" | "cron";
+  key: "events" | "sports" | "ai" | "storage" | "telegram" | "email" | "payments" | "cron" | "wallet";
   name: string;
   state: IntegrationState;
   detail: string;

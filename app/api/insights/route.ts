@@ -1,23 +1,28 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { apiError, json, readJson, validate } from "@/lib/http";
-import {
-  MAX_CSV_BYTES,
-  classifyTxns,
-  parseStatement,
-  summarize,
-  unmatchedMerchants,
-} from "@/lib/impulse";
-import { classifyMerchantsWithLLM, isLlmConfigured } from "@/lib/llm";
+import { categorizeMerchantsWithLLM, isLlmConfigured } from "@/lib/llm";
 import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
 import { InsightsRequestSchema } from "@/lib/schemas";
+import {
+  MAX_CSV_BYTES,
+  MAX_MONTHS,
+  classifyTxns,
+  parseStatement,
+  summarizeMonths,
+  unmatchedMerchants,
+} from "@/lib/spending";
 import type { InsightsResponse } from "@/lib/types";
 
 export const maxDuration = 30;
 
+/** Below this many days the monthly averages are flagged as rough. */
+const SHORT_STATEMENT_DAYS = 28;
+
 /**
  * POST /api/insights — CSV text (read in the browser) or the labeled sample.
- * The CSV is parsed in memory and discarded: never stored, never logged.
+ * The CSV is parsed in memory and discarded: never stored, never logged. The
+ * answer is a per-month spending summary; only the browser keeps it.
  */
 export async function POST(request: Request) {
   const limited = await rateLimit(request, "insights", RATE_LIMITS.heavy);
@@ -30,7 +35,7 @@ export async function POST(request: Request) {
   }
   const body = validate(InsightsRequestSchema, raw.data);
   if (!body.ok) return body.response;
-  const { csv, sample, goals } = body.data;
+  const { csv, sample } = body.data;
 
   let text: string;
   const isSample = sample === true;
@@ -61,19 +66,27 @@ export async function POST(request: Request) {
     let classifier: InsightsResponse["classifier"] = "rules";
     const unmatched = unmatchedMerchants(classified);
     if (unmatched.length > 0 && isLlmConfigured()) {
-      const llmMap = await classifyMerchantsWithLLM(unmatched);
+      const llmMap = await categorizeMerchantsWithLLM(unmatched);
       if (llmMap) {
         classified = classifyTxns(parsed.txns, llmMap);
         classifier = "rules+llm";
       }
     }
 
-    const summary = summarize(classified, goals);
+    const { months, coveredDays, truncated } = summarizeMonths(classified);
+    if (!months.some((m) => m.spendTotal > 0)) {
+      return apiError("We found only income and transfers in that file, so there's no spending to show.", 422);
+    }
     const warnings = [...parsed.warnings];
-    if (summary.months.length === 0) warnings.push("No spending found — only income or transfers.");
+    if (truncated) warnings.push(`Only the latest ${MAX_MONTHS} months were kept.`);
+    if (coveredDays < SHORT_STATEMENT_DAYS) {
+      warnings.push(
+        `This file covers ${coveredDays} day${coveredDays === 1 ? "" : "s"}, so the monthly figures are a rough estimate.`,
+      );
+    }
 
     return json<InsightsResponse>({
-      ...summary,
+      months,
       rowsParsed: parsed.rowsParsed,
       classifier,
       isSample,

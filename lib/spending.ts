@@ -1,14 +1,18 @@
 /**
- * Impulse-spending insights (spec §6, FR-11). Parses a bank CSV in memory
- * (never stored), categorizes spend with merchant rules, flags likely impulse
- * purchases and aggregates by month. The LLM step (unmatched merchants) is
- * orchestrated by the route; this module stays deterministic.
+ * Spending summary (spec §6, FR-11). Parses a bank CSV in memory (never
+ * stored), puts each purchase in a spending category with merchant rules and
+ * aggregates by calendar month. Nothing is judged here: on the Insights screen
+ * the user picks what they'd spend less on. The LLM step (merchants the rules
+ * don't know) is orchestrated by the route; this module stays deterministic.
  */
 import Papa from "papaparse";
-import type { InsightsGoal, InsightsMonth, InsightsResponse } from "./types";
+import type { InsightsMonth } from "./types";
 
 export const MAX_CSV_BYTES = 1_000_000;
 export const MAX_ROWS = 5_000;
+/** Latest months kept in one response (the browser keeps the same number). */
+export const MAX_MONTHS = 36;
+const TOP_MERCHANTS_PER_MONTH = 10;
 
 export const SPEND_CATEGORIES = [
   "Food delivery",
@@ -27,20 +31,16 @@ export const SPEND_CATEGORIES = [
 ] as const;
 export type SpendCategory = (typeof SPEND_CATEGORIES)[number];
 
-const ESSENTIAL: ReadonlySet<SpendCategory> = new Set(["Groceries", "Bills & rent", "Gas & transit"]);
-
 export interface Txn {
   date: string; // YYYY-MM-DD
   description: string;
   amount: number; // USD, positive = money spent
   kind: "spend" | "income" | "transfer";
-  hour?: number; // 0-23 when the export has a time
 }
 
 export interface ClassifiedTxn extends Txn {
   merchant: string; // cleaned display name
   category: SpendCategory;
-  impulse: boolean;
   ruleMatched: boolean;
 }
 
@@ -324,7 +324,6 @@ export function parseStatement(csv: string): ParsedStatement {
 
   interface Raw {
     date: string;
-    hour?: number;
     description: string;
     signed: number; // as exported (single amount column) or spend-negative (debit/credit)
     typeHint?: "debit" | "credit";
@@ -355,7 +354,7 @@ export function parseStatement(csv: string): ParsedStatement {
       continue;
     }
     if (signed === 0) continue;
-    raws.push({ date: d.iso, hour: d.hour, description: description || "Unknown", signed, typeHint });
+    raws.push({ date: d.iso, description: description || "Unknown", signed, typeHint });
   }
   if (skipped > 0) {
     warnings.push(`Skipped ${skipped} row${skipped === 1 ? "" : "s"} without a readable date or amount.`);
@@ -377,7 +376,7 @@ export function parseStatement(csv: string): ParsedStatement {
     let kind: Txn["kind"] = isSpend ? "spend" : "income";
     if (TRANSFER.test(r.description)) kind = "transfer";
     else if (isSpend && INCOME.test(r.description)) kind = "income";
-    return { date: r.date, hour: r.hour, description: r.description, amount, kind };
+    return { date: r.date, description: r.description, amount, kind };
   });
 
   return { txns, rowsParsed: raws.length, warnings };
@@ -408,36 +407,16 @@ export function cleanMerchant(description: string): string {
   return titleCase(s).slice(0, 40);
 }
 
-function impulseFor(category: SpendCategory, amount: number, hour?: number): boolean {
-  if (
-    category === "Food delivery" ||
-    category === "Coffee" ||
-    category === "App stores & in-app" ||
-    category === "Convenience stores"
-  ) {
-    return true;
-  }
-  if (category === "Online shopping") return amount < 50;
-  if (hour !== undefined && (hour >= 23 || hour < 4) && !ESSENTIAL.has(category)) return true; // late-night
-  return false;
-}
+/** Category per cleaned merchant name, for merchants the rules don't know. */
+export type LlmCategoryMap = ReadonlyMap<string, SpendCategory>;
 
-export type LlmMerchantMap = Record<string, { category: string; impulse: boolean }>;
-
-const isSpendCategory = (v: string): v is SpendCategory => (SPEND_CATEGORIES as readonly string[]).includes(v);
-
-/** Applies merchant rules; optional LLM map (by cleaned merchant name) fills unmatched merchants. */
-export function classifyTxns(txns: Txn[], llm?: LlmMerchantMap | null): ClassifiedTxn[] {
+/** Applies merchant rules; an optional LLM map (by cleaned merchant name) fills merchants the rules don't know. */
+export function classifyTxns(txns: Txn[], llm?: LlmCategoryMap | null): ClassifiedTxn[] {
   return txns.map((t) => {
     const rule = RULES.find((r) => r.test.test(t.description));
     const merchant = rule?.name ?? cleanMerchant(t.description);
-    let category: SpendCategory = rule?.category ?? "Other";
-    let impulse = impulseFor(category, t.amount, t.hour);
-    if (!rule && llm?.[merchant] && isSpendCategory(llm[merchant].category)) {
-      category = llm[merchant].category as SpendCategory;
-      impulse = Boolean(llm[merchant].impulse) && !ESSENTIAL.has(category);
-    }
-    return { ...t, merchant, category, impulse, ruleMatched: Boolean(rule) };
+    const category: SpendCategory = rule?.category ?? llm?.get(merchant) ?? "Other";
+    return { ...t, merchant, category, ruleMatched: Boolean(rule) };
   });
 }
 
@@ -458,32 +437,56 @@ export function unmatchedMerchants(classified: ClassifiedTxn[], limit = 60): str
 // Aggregation
 // ---------------------------------------------------------------------------
 
-export type InsightsSummary = Pick<
-  InsightsResponse,
-  "months" | "impulseTotal" | "monthlyImpulseAverage" | "equivalents"
->;
+function daysInMonth(month: string): number {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
 
-export function summarize(classified: ClassifiedTxn[], goals: InsightsGoal[]): InsightsSummary {
+/** Whole days from one "YYYY-MM-DD" to another, both included. */
+function daysInclusive(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
+export interface MonthsSummary {
+  months: InsightsMonth[];
+  coveredDays: number; // days the kept months cover
+  truncated: boolean; // true when older months were dropped (MAX_MONTHS)
+}
+
+/**
+ * Spending per calendar month; income and transfers are left out. A month is
+ * listed when the file has any row in it. `days` is how much of that month
+ * the file covers (from its first to its last row), so partial months can be
+ * labeled and monthly averages stay honest.
+ */
+export function summarizeMonths(classified: ClassifiedTxn[]): MonthsSummary {
+  if (classified.length === 0) return { months: [], coveredDays: 0, truncated: false };
+  const dates = classified.map((t) => t.date).sort();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+
   const byMonth = new Map<string, ClassifiedTxn[]>();
   for (const t of classified) {
-    if (t.kind !== "spend") continue;
     const key = t.date.slice(0, 7);
     const list = byMonth.get(key) ?? [];
-    list.push(t);
+    if (t.kind === "spend") list.push(t);
     byMonth.set(key, list);
   }
 
-  const months: InsightsMonth[] = [...byMonth.keys()].sort().map((month) => {
-    const list = byMonth.get(month) ?? [];
+  const keys = [...byMonth.keys()].sort();
+  const kept = keys.slice(-MAX_MONTHS);
+  const months: InsightsMonth[] = kept.map((month) => {
+    const spend = byMonth.get(month) ?? [];
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-${pad2(daysInMonth(month))}`;
+    const days = daysInclusive(first > monthStart ? first : monthStart, last < monthEnd ? last : monthEnd);
     const byCategory: Record<string, number> = {};
     const merchants = new Map<string, { amount: number; count: number }>();
     let spendTotal = 0;
-    let impulseTotal = 0;
-    for (const t of list) {
+    for (const t of spend) {
       spendTotal += t.amount;
-      if (t.impulse) impulseTotal += t.amount;
       byCategory[t.category] = (byCategory[t.category] ?? 0) + t.amount;
-      if (t.category === "Bills & rent") continue; // top merchants = where discretionary money went
+      if (t.category === "Bills & rent") continue; // the merchant list leaves out bills and rent (said in the UI)
       const m = merchants.get(t.merchant) ?? { amount: 0, count: 0 };
       m.amount += t.amount;
       m.count += 1;
@@ -492,19 +495,11 @@ export function summarize(classified: ClassifiedTxn[], goals: InsightsGoal[]): I
     for (const k of Object.keys(byCategory)) byCategory[k] = round2(byCategory[k]);
     const topMerchants = [...merchants.entries()]
       .map(([name, v]) => ({ name, amount: round2(v.amount), count: v.count }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-    return { month, spendTotal: round2(spendTotal), impulseTotal: round2(impulseTotal), byCategory, topMerchants };
+      .sort((x, y) => y.amount - x.amount)
+      .slice(0, TOP_MERCHANTS_PER_MONTH);
+    return { month, days, spendTotal: round2(spendTotal), count: spend.length, byCategory, topMerchants };
   });
 
-  const impulseTotal = round2(months.reduce((sum, m) => sum + m.impulseTotal, 0));
-  const monthlyImpulseAverage = months.length ? round2(impulseTotal / months.length) : 0;
-  const equivalents = goals.map((g) => ({
-    ...(g.envelopeId ? { envelopeId: g.envelopeId } : {}),
-    eventName: g.eventName,
-    target: g.target,
-    coveredPct: g.target > 0 ? Math.round((impulseTotal / g.target) * 100) : 0,
-  }));
-
-  return { months, impulseTotal, monthlyImpulseAverage, equivalents };
+  const coveredDays = months.reduce((sum, m) => sum + m.days, 0);
+  return { months, coveredDays, truncated: kept.length < keys.length };
 }

@@ -3,9 +3,10 @@
  * through the Telegram Bot API and the Resend email API (plain fetch).
  */
 import { randomBytes } from "node:crypto";
-import { findCity, US_CITIES } from "./cities";
+import { findCity } from "./cities";
 import { kvDel, kvGet, kvSadd, kvSet, kvSmembers, kvSrem } from "./kv";
 import { formatDate } from "./roadmap";
+import { parseTgPayload, tgPayloadFor } from "./telegram-payload";
 import { CATEGORIES, CATEGORY_LABELS, type Category, type LiventoEvent, type Profile } from "./types";
 
 export interface AlertRecord {
@@ -72,28 +73,60 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export async function sendTelegram(chatId: number | string, html: string): Promise<boolean> {
+/**
+ * Bot API origin. TELEGRAM_API_BASE (e.g. http://127.0.0.1:8790 for scripts/telegram-mock.mjs)
+ * is honoured outside production only, so the token can't be sent anywhere else in production.
+ */
+export function telegramApiBase(): string {
+  const override = process.env.TELEGRAM_API_BASE?.trim().replace(/\/+$/, "");
+  if (override && process.env.NODE_ENV !== "production" && /^https?:\/\//.test(override)) return override;
+  return "https://api.telegram.org";
+}
+
+export interface TelegramResult<T> {
+  ok: boolean;
+  result?: T;
+  description?: string;
+}
+
+/** One Bot API call (JSON body). Never throws and never logs the token. */
+export async function telegramCall<T = unknown>(method: string, params: Record<string, unknown>): Promise<TelegramResult<T>> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!token) return false;
+  if (!token) return { ok: false, description: "TELEGRAM_BOT_TOKEN is not set" };
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await fetch(`${telegramApiBase()}/bot${token}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: html,
-        parse_mode: "HTML",
-        link_preview_options: { is_disabled: true },
-      }),
+      body: JSON.stringify(params),
       cache: "no-store",
       signal: AbortSignal.timeout(6_000),
     });
-    if (!res.ok) console.warn(`[alerts] telegram sendMessage HTTP ${res.status}`);
-    return res.ok;
+    const data = (await res.json().catch(() => null)) as TelegramResult<T> | null;
+    if (res.ok && data?.ok) return { ok: true, result: data.result };
+    const description = typeof data?.description === "string" ? data.description.slice(0, 200) : `HTTP ${res.status}`;
+    // "message is not modified" is the normal outcome of re-rendering identical content.
+    if (!/not modified/i.test(description)) console.warn(`[telegram] ${method} failed: ${description}`);
+    return { ok: false, description };
   } catch {
-    console.warn("[alerts] telegram sendMessage failed");
-    return false;
+    console.warn(`[telegram] ${method} request failed`);
+    return { ok: false, description: "request failed" };
   }
+}
+
+/** Sends an HTML message; extra adds Bot API fields such as reply_markup. */
+export async function sendTelegram(
+  chatId: number | string,
+  html: string,
+  extra: Record<string, unknown> = {},
+): Promise<boolean> {
+  const res = await telegramCall("sendMessage", {
+    chat_id: chatId,
+    text: html,
+    parse_mode: "HTML",
+    link_preview_options: { is_disabled: true },
+    ...extra,
+  });
+  return res.ok;
 }
 
 export async function sendEmail(to: string, subject: string, html: string, text: string): Promise<boolean> {
@@ -138,6 +171,16 @@ function ticketLabel(e: LiventoEvent): string {
   return e.source === "ticketmaster" ? "Tickets on Ticketmaster" : "Official site";
 }
 
+/** "Ticketmaster, TheSportsDB": data sources the providers' terms ask us to credit; "" when none. */
+function dataCredits(events: LiventoEvent[]): string {
+  return [
+    events.some((e) => e.source === "ticketmaster") ? "Ticketmaster" : "",
+    events.some((e) => e.source === "thesportsdb") ? "TheSportsDB" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 function eventFacts(e: LiventoEvent): string {
   const parts = [
     e.date ? formatDate(e.date) : "Date TBA",
@@ -158,7 +201,8 @@ export function picksTelegram(title: string, events: LiventoEvent[], site: strin
     const ticketsLine = tickets ? `\n  <a href="${escapeHtml(tickets)}">${escapeHtml(ticketLabel(e))}</a>` : "";
     return `• <a href="${escapeHtml(eventUrl(e, site))}">${escapeHtml(e.name)}</a> — full cost on Livento\n  ${escapeHtml(eventFacts(e))}${ticketsLine}`;
   });
-  const attribution = events.some((e) => e.source === "ticketmaster") ? "\n\nEvent data: Ticketmaster." : "";
+  const credits = dataCredits(events);
+  const attribution = credits ? `\n\nEvent data: ${credits}.` : "";
   return `<b>${escapeHtml(title)}</b>\n\n${lines.join("\n\n")}${attribution}\n\n${footer}`;
 }
 
@@ -175,8 +219,6 @@ export function digestTelegram(rec: AlertRecord, events: LiventoEvent[], site: s
 // Telegram start links that work without storage
 // ---------------------------------------------------------------------------
 
-const STATELESS_START = /^p([0-9a-z]{1,3})-([0-9a-z]{1,3})$/;
-
 /**
  * A Telegram /start payload that carries the city and interests itself
  * ("p<city index>-<interest bits>", base 36, well under Telegram's 64-char limit),
@@ -184,31 +226,19 @@ const STATELESS_START = /^p([0-9a-z]{1,3})-([0-9a-z]{1,3})$/;
  * Null when the city is not in the US_CITIES list.
  */
 export function statelessStartPayload(city: string, stateCode: string | undefined, interests: Category[]): string | null {
-  const name = city.trim().toLowerCase();
-  const state = stateCode?.trim().toUpperCase();
-  const index = US_CITIES.findIndex((c) => c.name.toLowerCase() === name && (!state || c.state === state));
-  if (index < 0) return null;
-  const mask = interests.reduce((bits, c) => {
-    const i = CATEGORIES.indexOf(c);
-    return i >= 0 ? bits | (1 << i) : bits;
-  }, 0);
-  return `p${index.toString(36)}-${mask.toString(36)}`;
+  return tgPayloadFor(city, stateCode, interests);
 }
 
 /** Reads a payload made by statelessStartPayload; null for anything else. */
 export function parseStatelessStart(
   payload: string,
 ): Pick<AlertRecord, "city" | "stateCode" | "interests" | "favourites"> | null {
-  const match = STATELESS_START.exec(payload);
-  if (!match) return null;
-  const city = US_CITIES[parseInt(match[1], 36)];
-  if (!city) return null;
-  const mask = parseInt(match[2], 36);
-  const interests = CATEGORIES.filter((_, i) => (mask & (1 << i)) !== 0);
+  const target = parseTgPayload(payload);
+  if (!target) return null;
   return {
-    city: city.name,
-    stateCode: city.state,
-    interests: interests.length ? interests : [...CATEGORIES],
+    city: target.city.name,
+    stateCode: target.city.state,
+    interests: target.interests.length ? target.interests : [...CATEGORIES],
     favourites: [],
   };
 }
@@ -225,7 +255,8 @@ export function digestEmail(rec: AlertRecord, events: LiventoEvent[], site: stri
       return `<li style="margin:0 0 14px"><a href="${escapeHtml(eventUrl(e, site))}" style="color:#141414;font-weight:600">${escapeHtml(e.name)}</a><br><span style="color:#616161">${escapeHtml(eventFacts(e))}</span><br><a href="${escapeHtml(eventUrl(e, site))}" style="color:#141414">See the full cost on Livento</a>${ticketsLink}</li>`;
     })
     .join("");
-  const attribution = events.some((e) => e.source === "ticketmaster") ? "<p>Event data: Ticketmaster.</p>" : "";
+  const credits = dataCredits(events);
+  const attribution = credits ? `<p>Event data: ${credits}.</p>` : "";
   const html = `<div style="font-family:Inter,Arial,sans-serif;color:#141414;max-width:560px">
 <h2 style="margin:0 0 12px">New for you in ${escapeHtml(rec.city)}</h2>
 <p>Matching your interests: ${escapeHtml(interestsLabel(rec.interests))}.</p>

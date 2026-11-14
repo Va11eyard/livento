@@ -82,7 +82,7 @@ export function StatusView() {
         events.source === "ticketmaster"
           ? "Ticketmaster (live)"
           : events.source === "mixed"
-            ? "Ticketmaster + curated"
+            ? "live data + curated/sample"
             : "sample data";
       push({
         step: "Events",

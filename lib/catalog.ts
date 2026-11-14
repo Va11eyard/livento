@@ -1,6 +1,7 @@
 /**
  * Event catalogue (server-only): live Ticketmaster events when a key is set,
- * otherwise labeled sample events; plus the curated big-experiences list.
+ * otherwise labeled sample events plus real upcoming sports games from
+ * TheSportsDB (free, keyless); plus the curated big-experiences list.
  * Shared by GET /api/events and the daily alerts job.
  */
 import experiencesJson from "@/data/experiences.json";
@@ -9,6 +10,7 @@ import { findCity } from "./cities";
 import { addDays, isoDatePart, todayISO } from "./dates";
 import { distanceMiles, isLatLng, type LatLng } from "./geo";
 import { EventSchema } from "./schemas";
+import { getSportsEventById, getSportsEvents, sportsIdOf } from "./thesportsdb";
 import {
   getTicketmasterEventById,
   getTicketmasterEvents,
@@ -21,6 +23,12 @@ export const SAMPLE_NOTICE = "Showing sample events — live data needs a Ticket
 const TM_DOWN_NOTICE = "Live events are unavailable right now — showing sample events";
 const TM_STALE_NOTICE =
   "Live events are unavailable right now — showing Ticketmaster results saved in the last 24 hours";
+const SPORTS_SAMPLE_NOTICE =
+  "Sports games are real (TheSportsDB). Other events are fictional samples — live listings need a Ticketmaster API key";
+const SPORTS_TM_DOWN_NOTICE =
+  "Live events are unavailable right now — sports games are real (TheSportsDB), other events are fictional samples";
+const SPORTS_ONLY_NOTICE =
+  "Real upcoming games from TheSportsDB. Ticket prices aren't listed, so cost plans use labeled estimates";
 
 function loadEvents(raw: unknown, label: string, extra?: (item: Record<string, unknown>) => Partial<LiventoEvent>) {
   const out: LiventoEvent[] = [];
@@ -64,12 +72,15 @@ export function localEventById(id: string): LiventoEvent | undefined {
 
 /**
  * One event by Livento id: curated and sample events locally, `tm_<id>` from
- * Ticketmaster. Lets /event/[id] and /roadmap/[id] links work in a browser
- * that never opened the event (shared links, alert emails).
+ * Ticketmaster, `tsdb_<idEvent>` from TheSportsDB. Lets /event/[id] and
+ * /roadmap/[id] links work in a browser that never opened the event (shared
+ * links, alert emails).
  */
 export async function findEventById(id: string): Promise<LiventoEvent | null> {
   const local = localEventById(id);
   if (local) return local;
+  const sportsId = sportsIdOf(id);
+  if (sportsId) return getSportsEventById(sportsId);
   const tmId = ticketmasterIdOf(id);
   return tmId ? getTicketmasterEventById(tmId) : null;
 }
@@ -184,16 +195,38 @@ export async function findEvents(q: CatalogQuery, today: string = todayISO()): P
     };
   }
 
+  // No Ticketmaster answer: real games from TheSportsDB (home venue within the
+  // radius) replace the sample sports events; everything else stays sample data.
+  // "from" goes along only when it's a later day: the server's today can be ahead of the venue's.
+  const wantsSports = categories.length === 0 || categories.includes("sports");
+  const games = wantsSports
+    ? await getSportsEvents({
+        lat: origin?.lat,
+        lng: origin?.lng,
+        city,
+        state,
+        radiusMiles: q.radius,
+        from: from > today ? from : undefined,
+        to,
+      })
+    : [];
+  const sports = games.filter((e) => matchesKeyword(e, keyword)).map((e) => withDistance(e, origin));
+
   const samples = sampleEvents()
     .filter((e) => matchesCategories(e, categories))
+    .filter((e) => !(sports.length > 0 && e.category === "sports"))
     .filter((e) => !e.date || (e.date >= from && e.date <= to))
     .filter((e) => matchesKeyword(e, keyword))
     .map((e) => withDistance(e, origin))
     .sort(byNearest(city, state));
 
+  const tmDown = hasTicketmasterKey();
+  let notice = tmDown ? TM_DOWN_NOTICE : SAMPLE_NOTICE;
+  if (sports.length > 0) notice = samples.length ? (tmDown ? SPORTS_TM_DOWN_NOTICE : SPORTS_SAMPLE_NOTICE) : SPORTS_ONLY_NOTICE;
+
   return {
-    events: [...samples, ...curated.sort(byNearest(city, state))],
-    source: "sample",
-    notice: hasTicketmasterKey() ? TM_DOWN_NOTICE : SAMPLE_NOTICE,
+    events: [...sports, ...samples, ...curated.sort(byNearest(city, state))],
+    source: sports.length > 0 && samples.length === 0 ? "mixed" : "sample",
+    notice,
   };
 }

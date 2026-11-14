@@ -9,11 +9,11 @@ import { useToast } from "./Toast";
 import styles from "./PremiumGate.module.css";
 
 export const PREMIUM_FEATURES = [
-  "Weekly savings plan and virtual envelopes",
-  "Reminder schedule you can add to your calendar",
+  "Livento wallet with an envelope for each goal",
+  "Automatic weekly withdrawal from your card into the wallet",
   "Spend-vs-save comparator between two events",
   "Trip roadmap with dated steps and hotel links",
-  "Impulse-spending insights from a bank CSV",
+  "Spending breakdown from your bank statement",
 ] as const;
 
 interface PremiumGateProps {

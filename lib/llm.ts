@@ -16,13 +16,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { SPEND_CATEGORIES } from "./impulse";
+import { SPEND_CATEGORIES, type SpendCategory } from "./spending";
 import { CATEGORY_LABELS, type LiventoEvent, type Profile, type RoadmapStep } from "./types";
 
 export const LLM_MODEL = "claude-opus-5-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
-const TIMEOUTS = { rerank: 12_000, classify: 12_000, roadmap: 20_000 } as const;
+const TIMEOUTS = { rerank: 12_000, categorize: 12_000, roadmap: 20_000 } as const;
 
 let client: Anthropic | undefined;
 let betaFallbacksRejected = false;
@@ -338,7 +338,7 @@ export async function polishRoadmapWithLLM(
 }
 
 // ---------------------------------------------------------------------------
-// 3. Classify ambiguous merchants
+// 3. Categorize merchants the rules don't know
 // ---------------------------------------------------------------------------
 
 const MerchantSchema = z.object({
@@ -346,40 +346,35 @@ const MerchantSchema = z.object({
     z.object({
       name: z.string(),
       category: z.enum(SPEND_CATEGORIES),
-      impulse: z.boolean(),
     }),
   ),
 });
 
 const MERCHANT_SYSTEM = [
-  "You classify merchant names from US bank statements for a personal budgeting app.",
-  "For each name choose the single best category from the allowed list, and say whether purchases there are likely impulse spending:",
-  "small, discretionary, unplanned buys such as food delivery, snacks, coffee, in-app purchases, small online orders or novelty shopping.",
-  "Essentials (groceries, rent, utilities, insurance, healthcare, commuting) are never impulse. If unsure, use \"Other\" with impulse false.",
+  "You categorize merchant names from US bank statements for a personal budgeting app.",
+  "For each name choose the single best spending category from the allowed list. If unsure, use \"Other\".",
   "Return each given name exactly as written. Do not add names.",
 ].join("\n");
 
-/** Category + impulse flag for ≤ 60 merchant names; null on failure. */
-export async function classifyMerchantsWithLLM(
-  names: string[],
-): Promise<Record<string, { category: string; impulse: boolean }> | null> {
+/** Spending category for ≤ 60 merchant names, keyed by the name as given; null on failure. */
+export async function categorizeMerchantsWithLLM(names: string[]): Promise<Map<string, SpendCategory> | null> {
   const unique = [...new Set(names.map(tidy).filter(Boolean))].slice(0, 60);
   if (!isLlmConfigured() || unique.length === 0) return null;
   const out = await structuredCall({
-    label: "classify",
+    label: "categorize",
     schema: MerchantSchema,
     system: MERCHANT_SYSTEM,
     user: JSON.stringify({ allowedCategories: SPEND_CATEGORIES, merchants: unique }),
     effort: "low",
     maxTokens: 4_000,
-    timeoutMs: TIMEOUTS.classify,
+    timeoutMs: TIMEOUTS.categorize,
   });
   if (!out) return null;
   const wanted = new Set(unique);
-  const map: Record<string, { category: string; impulse: boolean }> = {};
+  const map = new Map<string, SpendCategory>();
   for (const item of out.items) {
     const name = tidy(item.name);
-    if (wanted.has(name)) map[name] = { category: item.category, impulse: item.impulse };
+    if (wanted.has(name)) map.set(name, item.category);
   }
-  return Object.keys(map).length ? map : null;
+  return map.size ? map : null;
 }

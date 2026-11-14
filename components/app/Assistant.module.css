@@ -1,0 +1,299 @@
+/*
+ * Ask Livento: floating launcher, side panel (dialog style from ConfirmDialog:
+ * 1px ink border, dim backdrop) and the chat shared with /assistant.
+ */
+
+/* Launcher ------------------------------------------------------------------ */
+
+.launcher {
+  position: fixed;
+  right: clamp(14px, 2.2vw, 28px);
+  bottom: clamp(14px, 2.2vw, 28px);
+  z-index: 55; /* under toasts (60) and dialogs (70) */
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 13px 20px 13px 16px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: #fff;
+  font: 650 15px/1 var(--font-ui);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.launcher:hover,
+.launcher[data-state="open"] {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.launcherDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--yellow);
+  transition: background 0.15s ease;
+}
+.launcher:hover .launcherDot,
+.launcher[data-state="open"] .launcherDot {
+  background: var(--ink);
+}
+
+/* Side panel ---------------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #14141470;
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 71;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(460px, 100vw);
+  padding: 24px 24px 14px;
+  border-left: 1px solid var(--ink);
+  background: #fff;
+}
+.panel:focus {
+  outline: none;
+}
+
+.panelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.panelKicker {
+  margin-bottom: 6px;
+  font: 650 13px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
+}
+
+.panelTitle {
+  font: 650 clamp(26px, 3vw, 34px) / 1.05 var(--font-ui);
+  letter-spacing: -0.04em;
+}
+
+.close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font: 400 26px/1 var(--font-ui);
+  transition: background 0.15s ease;
+}
+.close:hover {
+  background: var(--yellow);
+}
+
+/* Chat ------------------------------------------------------------------------ */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.panelChat {
+  flex: 1;
+}
+
+.pageChat {
+  max-width: 820px;
+  padding: clamp(14px, 2.4vw, 28px);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.toolLink {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font: 650 14px var(--font-ui);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.toolLink:hover {
+  background: var(--yellow);
+}
+.toolLink:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.log {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.pageChat .log {
+  flex: none;
+  min-height: 260px;
+  max-height: min(58vh, 640px);
+}
+
+.intro {
+  display: grid;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.introTitle {
+  font: 650 clamp(20px, 2.2vw, 24px) / 1.15 var(--font-ui);
+  letter-spacing: -0.03em;
+}
+
+.introText {
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+.msg {
+  max-width: 88%;
+  padding: 11px 15px;
+  border-radius: 18px;
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.prose p + p,
+.prose p + ul,
+.prose ul + p,
+.prose ul + ul {
+  margin-top: 8px;
+}
+.prose ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 1.15em;
+}
+
+.user {
+  align-self: flex-end;
+  border-bottom-right-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  white-space: pre-wrap;
+}
+
+.assistant {
+  align-self: flex-start;
+  border-bottom-left-radius: 6px;
+  background: var(--surface);
+}
+
+.thinking {
+  color: var(--ink-soft);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+.actions :global(.pill) .glyph {
+  font-size: 13px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 5px 5px 5px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 24px;
+  background: #fff;
+}
+.composer:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  max-height: 160px;
+  padding: 9px 0;
+  border: 0;
+  background: transparent;
+  font: 16px/1.4 var(--font-body);
+  resize: none;
+}
+.input:focus-visible {
+  outline: none; /* the composer shows the focus ring */
+}
+
+.send {
+  flex: none;
+}
+
+.status {
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+.footnote {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .launcher {
+    min-height: 44px;
+    padding: 11px 16px 11px 13px;
+    font-size: 14px;
+  }
+  .panel {
+    padding: 16px 16px 10px;
+    border-left: 0;
+  }
+  .msg {
+    max-width: 92%;
+  }
+}

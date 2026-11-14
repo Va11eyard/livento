@@ -6,7 +6,7 @@ Tokens live in `app/globals.css`; landing-only styles live in `app/landing.css`
 scoped under `.lv-landing`; app screens use CSS modules plus the shared utilities.
 
 ## Voice
-- Motto: **"Spend on memories, not impulses."**
+- Motto: **"Spend on memories, not impulses."** (the motto only: never label a user's purchases as "impulse"; show spending by category and let the user choose what to trim)
 - Short, concrete, friendly. Numbers with units ("$212 total", "$18/week").
 - Never invent testimonials, user counts, savings or results.
 - Every non-fact number carries a label: `.tag.estimate` ("Estimate") or `.tag.sample` ("Sample data").
@@ -30,7 +30,7 @@ Monochrome first. Yellow is used for emphasis, never as body text color.
 ## Typography
 | Role | Font | Spec |
 |---|---|---|
-| Wordmark / hero word | Oswald | 600–650, uppercase, tracking −0.06em, hero `clamp(108px, min(30vw, 34vh), 320px)` (29vw under 768px; "LIVENTO" is shorter than the reference word) |
+| Wordmark / hero word | Oswald | 600–650, uppercase, tracking −0.06em, slanted `skewX(-12deg)` like the header logo; hero `clamp(80px, min(15vw, 21vh), 210px)` (`clamp(64px, 22vw, 115px)` under 768px) so the motto, lead and CTAs stay above the fold |
 | Display heading `.display` | TASA Orbiter | 610, `clamp(40px, 5.6vw, 78px)/0.99`, tracking −0.055em, max 20ch |
 | Screen title `.title` | TASA Orbiter | 610, `clamp(30px, 3.6vw, 48px)/1.02`, tracking −0.045em |
 | Kicker `.kicker` | TASA Orbiter | 650, 14px, uppercase, tracking 0.035em, format "01 / Label" |

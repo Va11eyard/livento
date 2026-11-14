@@ -4,7 +4,8 @@ import { InsightsView } from "./InsightsView";
 
 export const metadata: Metadata = {
   title: "Insights · Livento",
-  description: "See where impulse money goes and what experiences it could cover. Processed in memory, never stored.",
+  description:
+    "See where your money goes by category, month and merchant, and what spending a little less could free for your goals. The summary stays on your device; the file isn't kept.",
 };
 
 export default function InsightsPage() {

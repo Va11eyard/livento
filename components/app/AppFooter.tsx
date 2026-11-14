@@ -6,7 +6,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { useToast } from "./Toast";
 import styles from "./AppFooter.module.css";
 
-/** Compact yellow footer: motto, where data lives, and a one-click way to clear it. */
+/** Compact yellow footer: motto, where data and money live, and a one-click way to clear this browser. */
 export function AppFooter() {
   const notify = useToast();
   return (
@@ -14,8 +14,8 @@ export function AppFooter() {
       <div className={`wrap ${styles.inner}`}>
         <p className={styles.motto}>Spend on memories, not impulses.</p>
         <p className={styles.note}>
-          Your profile, envelopes and saved events are stored only in this browser. No account, and Livento never
-          holds your money.
+          No account needed: your profile, goals and spending summary stay in this browser. Money you add is kept in
+          your Livento wallet until you withdraw it.
         </p>
         <div className={styles.row}>
           <Link href="/" className="brand">
@@ -24,13 +24,13 @@ export function AppFooter() {
           <nav aria-label="Footer" className={styles.links}>
             <Link href="/discover">Discover</Link>
             <Link href="/pricing">Pricing</Link>
-            <Link href="/onboarding">Edit profile</Link>
+            <Link href="/profile">Profile</Link>
             <Link href="/status">Status</Link>
             <ConfirmDialog
               triggerLabel="Clear my data"
               triggerClassName={styles.clear}
               title="Clear everything?"
-              description="This removes your profile, envelopes, saved events and Premium unlock from this browser. It can't be undone."
+              description="This removes your profile and photos, envelopes, saved events, spending summary and Premium unlock from this browser, and unlinks your wallet from it. Withdraw any money in your wallet first. It can't be undone."
               confirmLabel="Clear my data"
               cancelLabel="Keep it"
               onConfirm={() => {

@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { useAppState, useHydrated } from "@/lib/storage";
+import { Avatar } from "@/app/profile/Avatar";
+import { socialOf, useAppState, useHydrated, useProfileMedia } from "@/lib/storage";
 import styles from "./AppNav.module.css";
 
 const LINKS = [
   { href: "/discover", label: "Discover" },
-  { href: "/envelopes", label: "Envelopes" },
+  { href: "/envelopes", label: "Wallet" },
   { href: "/insights", label: "Insights" },
   { href: "/pricing", label: "Pricing" },
 ] as const;
@@ -23,6 +24,7 @@ function isActive(pathname: string, href: string): boolean {
 export function AppNav() {
   const pathname = usePathname() ?? "";
   const state = useAppState();
+  const media = useProfileMedia();
   const hydrated = useHydrated();
   // The menu is open only for the path it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -93,9 +95,21 @@ export function AppNav() {
                 {link.label}
               </Link>
             ))}
-            <Link href="/onboarding" className={`pill small ${styles.cta}`} onClick={() => setOpenOn(null)}>
-              {hasProfile ? "Edit profile" : "Start"} <span aria-hidden="true">↗</span>
-            </Link>
+            {hasProfile ? (
+              <Link
+                href="/profile"
+                className={`${styles.link} ${styles.profile}`}
+                aria-current={isActive(pathname, "/profile") ? "page" : undefined}
+                onClick={() => setOpenOn(null)}
+              >
+                <Avatar src={media.avatar} name={socialOf(state).displayName} className={styles.chip} />
+                Profile
+              </Link>
+            ) : (
+              <Link href="/onboarding" className={`pill small ${styles.cta}`} onClick={() => setOpenOn(null)}>
+                Start <span aria-hidden="true">↗</span>
+              </Link>
+            )}
           </nav>
         </div>
       </div>

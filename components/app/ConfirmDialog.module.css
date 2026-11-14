@@ -36,3 +36,9 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+
+.error {
+  margin: -10px 0 20px;
+  color: var(--danger);
+  font-size: 15px;
+}

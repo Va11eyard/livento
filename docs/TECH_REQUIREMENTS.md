@@ -4,14 +4,14 @@ As of 2026-11-14 · Zimran Business Cup 2.0 (24-hour build)
 
 ## 1. Overview
 
-Livento is a web app that turns impulse spending into planned experiences. Motto: **"Spend on memories, not impulses."** Target users: US adults aged 25–45. The core must work for real; judges must be able to use it without signing up.
+Livento is a web app that turns everyday spending into planned experiences: it finds events, shows the full cost, and saves for them in a Livento wallet. Motto: **"Spend on memories, not impulses."** Target users: US adults aged 25–45. The core must work for real; judges must be able to use it without signing up.
 
-**User journey:** onboarding quiz → personalized event recommendations → pick an event → see its full cost → compare "spend $200 now" vs "save for the $550 one" → set money aside in a virtual envelope → get a trip roadmap → see where impulse money went.
+**User journey:** onboarding quiz → personalized event recommendations → pick an event → see its full cost → compare "spend $200 now" vs "save for the $550 one" → save in a wallet envelope (automatic weekly withdrawal) → get a trip roadmap → see where your money goes → ask the AI finance helper.
 
 | Tier | What it includes |
 | --- | --- |
-| Free | Event catalogue, personalized recommendations, event alerts (email or Telegram) |
-| Premium ($4.99/mo or $39/yr, test price, shown transparently) | Savings envelopes, auto-save reminder schedule, spend-vs-save comparator, trip roadmap, impulse-spending insights |
+| Free | Event catalogue (live sports via TheSportsDB; Ticketmaster when keyed), personalized recommendations, full cost, alerts (email or Telegram bot), profile page, Ask Livento |
+| Premium ($4.99/mo or $39/yr, test price, shown transparently) | Livento wallet with an envelope per goal, automatic weekly withdrawal from the card (auto-save), spend-vs-save comparator, trip roadmap, spending breakdown from a bank statement |
 
 **Judge path:** "Try with a sample profile" (labeled sample) + "Demo unlock (no charge)" for Premium. A test-mode checkout shows the real payment flow.
 
@@ -53,21 +53,24 @@ Next.js on Vercel
 | FR-5 | Event alerts: subscribe by email or Telegram bot; a daily job sends new events matching saved interests | Free |
 | FR-6 | Event detail: full cost estimate (tickets, estimated fees, travel, hotel nights, buffer — each editable and labeled) + presale and on-sale dates | Free (detail) / Premium (plan) |
 | FR-7 | Savings plan: weekly amount needed by the on-sale or event date; add to an envelope | Premium |
-| FR-8 | Virtual envelopes: balance per goal (user logs "I set aside $X"), progress bar, reminder schedule. Money stays in the user's own bank | Premium |
+| FR-8 | Livento wallet (user decision, 2026-11-14): an envelope per goal funded by card; auto-save withdraws the weekly amount from the saved card every week (daily job) and stops at the goal; withdraw back to the card anytime (refund). Stripe test mode only; balances come from Stripe (PaymentIntents and refunds per customer); the wallet is linked to the browser by a signed token | Premium |
 | FR-9 | Spend-vs-save comparator: from an envelope balance and two events, show "go now" (what's left, weeks to reach B) vs "skip" (date B is reached) | Premium |
 | FR-10 | Roadmap: AI itinerary per event (vacation request date, presale reminders, travel options, hotel deep links to Booking/Google Hotels with dates and city prefilled, day-of checklist) | Premium |
-| FR-11 | Impulse insights: upload a bank CSV or use a labeled sample statement; categorize spending; flag likely impulse spend; show "impulse spend = experience equivalents" tied to the user's goals. Processed in memory, never stored | Premium |
+| FR-11 | Spending breakdown: upload a bank CSV or use a labeled sample statement; spending by category and month (nothing is labeled "impulse"); the user picks categories and a percentage to spend less, and sees how much sooner each goal is reached. The summary is kept in the browser; the file isn't kept | Premium |
 | FR-12 | Pricing page and paywall: test-mode checkout + demo unlock | — |
 | FR-13 | Sample mode: one click loads a labeled sample profile | — |
 | FR-14 | Anonymous interaction log (like, skip, save) to enable item-based recommendations later | — |
+| FR-15 | Profile page: cover (preset or photo), avatar, name, bio, stats, goals, upcoming plans, motivational quote (random, own text, or AI-written about the user's goals). Stored in the browser | Free |
+| FR-16 | Ask Livento: AI finance helper (Claude with tools: savings plan, events, cost plan, trim plan, hotel/map links). All numbers come from tools; actions are deterministic links. Also answers in the Telegram bot | Free |
+| FR-17 | Telegram bot: link the web profile by deep link, or set city and interests in the chat (buttons); /picks, /profile, /quote, /stop; profile kept on a pinned card (no database needed); "Open Livento" Mini App | Free |
 
 ## 4. Non-functional requirements
 
 | Area | Requirement |
 | --- | --- |
-| Signup | None. Profile and envelopes live in localStorage. Email or Telegram chat ID only for alerts, with consent |
+| Signup | None. Profile, envelopes, spending summary and profile photos live in localStorage; the wallet lives in Stripe (test mode), linked to the browser. Email or Telegram chat only for alerts, with consent |
 | Security | All keys server-side only. Per-IP rate limit on every API route. No raw upstream errors returned to the browser |
-| Privacy | Uploaded CSV is parsed in memory and discarded. Never accept bank credentials, SSNs or card numbers |
+| Privacy | Uploaded CSV is parsed in memory; only the summary is kept, in the browser. Card details are entered on Stripe's page, never on Livento. Never accept bank credentials or SSNs |
 | Honesty | Label every estimated price and every sample record. No invented testimonials, savings or user counts. Disclose affiliate links if added |
 | Data terms | No scraping. Follow Ticketmaster API terms (attribution, branding, caching). Hotels are outbound links only |
 | Performance | Landing LCP < 2.5 s on 4G. API responses < 3 s. Event queries cached 1 hour |
@@ -125,11 +128,11 @@ All numbers come from rules and data; the LLM only re-orders and writes words. W
 - Skip: weeks to B = `ceil(max(0, costB − balance) / c)`.
 - Neutral wording; never tell the user which to pick.
 
-**Impulse classifier:**
-1. Normalize CSV rows to date, description, amount (spend = negative or a debit column).
-2. Rule match on merchant keywords: food delivery, small online retail (< $50), app stores / in-app, convenience stores, late-night purchases when a time exists.
-3. Unmatched merchants → one LLM batch call for category + impulse yes/no (skipped without a key).
-4. Output monthly impulse totals, top merchants, and "experience equivalents" (share of each saved goal the impulse total would cover).
+**Spending breakdown (no "impulse" labels):**
+1. Normalize CSV rows to date, description, amount (spend = negative or a debit column); income and transfers are excluded.
+2. Merchant rules assign a category; unmatched merchants → one LLM batch call for a category only (skipped without a key).
+3. Output per month: total, covered days, category totals, top merchants. Category monthly average = total ÷ covered days × 30.44.
+4. Trim plan (client): freed per month = Σ picked category averages × percent; per week = ÷ 4.33; goal weeks sooner = ceil(remaining ÷ weekly) − ceil(remaining ÷ (weekly + freed)).
 
 ## 7. API contract
 
@@ -177,7 +180,8 @@ App screens: `/onboarding`, `/discover`, `/event/[id]`, `/envelopes`, `/roadmap/
 livento/
   app/            page.tsx (landing), onboarding/, discover/, event/[id]/, envelopes/, roadmap/[id]/, insights/, pricing/, api/*
   components/     landing/* (Trail, LandingNav…), app/* (AppNav, EventCard, CostTable, Comparator, EnvelopeBar…)
-  lib/            types.ts, ticketmaster.ts, score.ts, cost.ts, compare.ts, impulse.ts, llm.ts, kv.ts, ratelimit.ts, geo.ts, storage.ts
+  lib/            types.ts, catalog.ts, ticketmaster.ts, thesportsdb.ts, score.ts, cost.ts, compare.ts, spending.ts, llm.ts, assistant.ts,
+                  stripe.ts, wallet.ts, autosave.ts, alerts.ts, telegram*.ts, quotes.ts, kv.ts, ratelimit.ts, geo.ts, storage.ts
   data/           experiences.json, sample-profile.json, sample-events.json, sample-statement.csv
   public/assets/  fonts/, licenses/, trail/, CREDITS.md, assets.json
   scripts/        download-assets.mjs

@@ -58,6 +58,29 @@
   min-height: 36px;
 }
 
+/* "Profile" link with the avatar (or initials on yellow) */
+.profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--ink);
+  font: 650 12px / 1 var(--font-ui);
+  letter-spacing: -0.02em;
+  object-fit: cover;
+  overflow: hidden;
+}
+
 .menu {
   display: none;
   border: 0;

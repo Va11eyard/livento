@@ -3,10 +3,11 @@
 import type { ReactNode } from "react";
 import { AppFooter } from "./AppFooter";
 import { AppNav } from "./AppNav";
+import { AssistantLauncher } from "./Assistant";
 import { ToastProvider } from "./Toast";
 import styles from "./AppShell.module.css";
 
-/** Frame for every app screen: skip link, fixed header, main landmark, footer, toasts. */
+/** Frame for every app screen: skip link, fixed header, main landmark, footer, Ask Livento, toasts. */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <AppFooter />
+      <AssistantLauncher />
     </ToastProvider>
   );
 }

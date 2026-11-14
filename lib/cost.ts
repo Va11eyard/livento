@@ -81,6 +81,27 @@ export function needsTrip(event: LiventoEvent, profile: Profile): boolean {
   return !isSameCity(event, profile);
 }
 
+/**
+ * Rough per-ticket planning estimates for big US leagues, used only when the source
+ * lists no price (TheSportsDB never does). Round planning defaults, not quotes or
+ * market data: the plan labels them as estimates and the user types the real price.
+ */
+export const LEAGUE_TICKET_ESTIMATES: Readonly<Record<string, number>> = {
+  NFL: 140,
+  NBA: 100,
+  NHL: 90,
+  MLS: 45,
+  MLB: 40,
+};
+
+/** Planning estimate for an unpriced sports event in a known league (from its sub-genre or tags). */
+export function estimatedTicketPrice(event: LiventoEvent): { price: number; league: string } | undefined {
+  if (event.category !== "sports") return undefined;
+  const keys = new Set([event.subGenre, event.genre, ...(event.tags ?? [])].map((v) => v?.trim().toUpperCase()));
+  const league = Object.keys(LEAGUE_TICKET_ESTIMATES).find((l) => keys.has(l));
+  return league ? { price: LEAGUE_TICKET_ESTIMATES[league], league } : undefined;
+}
+
 /** Deadline rule: future public on-sale → on-sale; else event date; else today + 8 weeks. */
 export function planDeadline(
   event: LiventoEvent,
@@ -115,9 +136,19 @@ export function buildPlan(
   const maxPrice = finiteNonNeg(event.priceMax);
   const sourcePrice = minPrice ?? maxPrice;
   const unitPrice = userPrice ?? sourcePrice;
+  const leagueEstimate = unitPrice === undefined ? estimatedTicketPrice(event) : undefined;
 
   let ticket: CostLine;
-  if (unitPrice === undefined) {
+  if (unitPrice === undefined && leagueEstimate) {
+    const each = formatUSD(leagueEstimate.price);
+    ticket = {
+      key: "ticket",
+      label: `Tickets (${qty} × ${each}, price not listed)`,
+      amount: Math.round(qty * leagueEstimate.price),
+      estimate: true,
+      note: `Price not listed. ${each} is a rough estimate for an ${leagueEstimate.league} game, not a quoted price — enter the real price from the official site`,
+    };
+  } else if (unitPrice === undefined) {
     ticket = {
       key: "ticket",
       label: "Tickets (price TBA)",

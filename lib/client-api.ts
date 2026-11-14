@@ -10,9 +10,14 @@
 import type {
   AlertSubscribeRequest,
   AlertSubscribeResponse,
+  AssistantRequest,
+  AssistantResponse,
+  AssistantStatusResponse,
   Category,
   CheckoutRequest,
   CheckoutResponse,
+  CheckoutSessionRequest,
+  CheckoutSessionResponse,
   EventsResponse,
   HealthResponse,
   InsightsRequest,
@@ -21,10 +26,20 @@ import type {
   PlanRequest,
   PlanResponse,
   Profile,
+  QuoteRequest,
+  QuoteResponse,
   RecommendRequest,
   RecommendResponse,
   RoadmapRequest,
   RoadmapResponse,
+  WalletAutosaveRequest,
+  WalletConfirmRequest,
+  WalletConfirmResponse,
+  WalletCreateResponse,
+  WalletDepositRequest,
+  WalletDepositResponse,
+  WalletSummary,
+  WalletWithdrawRequest,
 } from "@/lib/types";
 
 export const TIMEOUTS = {
@@ -256,9 +271,50 @@ export function checkout(req: CheckoutRequest, signal?: AbortSignal): Promise<Ch
   return call("/api/checkout", { method: "POST", body: req, timeoutMs: TIMEOUTS.standard, signal }, isCheckoutResponse);
 }
 
+const isCheckoutSessionResponse = (d: unknown): d is CheckoutSessionResponse =>
+  isObject(d) && typeof d.ok === "boolean";
+
+/** POST /api/checkout/session — confirm a finished Premium test checkout, or cancel its subscription. */
+export function checkoutSession(req: CheckoutSessionRequest, signal?: AbortSignal): Promise<CheckoutSessionResponse> {
+  return call(
+    "/api/checkout/session",
+    { method: "POST", body: req, timeoutMs: TIMEOUTS.standard, signal },
+    isCheckoutSessionResponse,
+  );
+}
+
 /** GET /api/health — which integrations are configured on this deployment (no key values). */
 export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
   return call("/api/health", { timeoutMs: TIMEOUTS.standard, signal }, isHealthResponse);
+}
+
+const isQuoteResponse = (d: unknown): d is QuoteResponse =>
+  isObject(d) && typeof d.text === "string" && d.text.trim() !== "" && (d.source === "ai" || d.source === "curated");
+
+/** POST /api/quote — a short motivational line about the user's goals (AI, or a curated line as fallback). */
+export function quoteForGoals(req: QuoteRequest, signal?: AbortSignal): Promise<QuoteResponse> {
+  return call("/api/quote", { method: "POST", body: req, timeoutMs: TIMEOUTS.llm, signal }, isQuoteResponse);
+}
+
+/** Ask Livento runs a few calculator rounds per answer (server deadline 45 s), so it gets a longer timeout. */
+const ASSISTANT_TIMEOUT_MS = 60_000;
+
+const isAssistantResponse = (d: unknown): d is AssistantResponse =>
+  isObject(d) &&
+  (d.off === true
+    ? typeof d.message === "string"
+    : typeof d.text === "string" && Array.isArray(d.actions) && Array.isArray(d.usedTools));
+const isAssistantStatus = (d: unknown): d is AssistantStatusResponse =>
+  isObject(d) && (d.off === false || (d.off === true && typeof d.message === "string"));
+
+/** POST /api/assistant — one Ask Livento turn: plain-text answer + server-built action links, or `{ off: true }`. */
+export function askAssistant(req: AssistantRequest, signal?: AbortSignal): Promise<AssistantResponse> {
+  return call("/api/assistant", { method: "POST", body: req, timeoutMs: ASSISTANT_TIMEOUT_MS, signal }, isAssistantResponse);
+}
+
+/** GET /api/assistant — whether Ask Livento is connected on this deployment (no AI call). */
+export function assistantStatus(signal?: AbortSignal): Promise<AssistantStatusResponse> {
+  return call("/api/assistant", { timeoutMs: TIMEOUTS.standard, signal }, isAssistantStatus);
 }
 
 /** POST /api/log — anonymous like/skip/save/open (FR-14). Fire-and-forget: never throws, never blocks the UI. */
@@ -267,4 +323,55 @@ export function logInteraction(req: LogRequest): void {
   call("/api/log", { method: "POST", body: req, timeoutMs: TIMEOUTS.log, keepalive: true }, isAnything).catch(() => {
     // Logging is best-effort by design.
   });
+}
+
+// ---------------------------------------------------------------------------
+// Livento wallet (Stripe test mode). The token goes in the POST body only.
+// ---------------------------------------------------------------------------
+
+/** Wallet routes make several Stripe calls in a row, so they get a longer timeout. */
+const WALLET_TIMEOUT_MS = 30_000;
+
+const isWalletSummary = (d: unknown): d is WalletSummary =>
+  isObject(d) && d.testMode === true && typeof d.total === "number" && isObject(d.envelopes);
+const isWalletToken = (d: unknown): d is WalletCreateResponse => isObject(d) && typeof d.token === "string";
+const isWalletUrl = (d: unknown): d is WalletDepositResponse => isObject(d) && typeof d.url === "string";
+
+function walletCall<T>(path: string, body: unknown, validate: (d: unknown) => d is T, signal?: AbortSignal): Promise<T> {
+  return call(path, { method: "POST", body, timeoutMs: WALLET_TIMEOUT_MS, signal }, validate);
+}
+
+/** POST /api/wallet — creates this browser's wallet (a Stripe test-mode customer). */
+export function createWallet(signal?: AbortSignal): Promise<WalletCreateResponse> {
+  return walletCall("/api/wallet", {}, isWalletToken, signal);
+}
+
+/** POST /api/wallet/summary — balances, history and auto-save per envelope. */
+export function walletSummary(token: string, signal?: AbortSignal): Promise<WalletSummary> {
+  return walletCall("/api/wallet/summary", { token }, isWalletSummary, signal);
+}
+
+/** POST /api/wallet/deposit — Stripe Checkout URL that adds money (and, with autosave, saves the card). */
+export function walletDeposit(req: WalletDepositRequest, signal?: AbortSignal): Promise<WalletDepositResponse> {
+  return walletCall("/api/wallet/deposit", req, isWalletUrl, signal);
+}
+
+/** POST /api/wallet/confirm — after Checkout returns; idempotent. */
+export function walletConfirm(req: WalletConfirmRequest, signal?: AbortSignal): Promise<WalletConfirmResponse> {
+  return walletCall("/api/wallet/confirm", req, isWalletSummary as (d: unknown) => d is WalletConfirmResponse, signal);
+}
+
+/** POST /api/wallet/withdraw — refunds to the card; amount omitted = the whole envelope. */
+export function walletWithdraw(req: WalletWithdrawRequest, signal?: AbortSignal): Promise<WalletSummary> {
+  return walletCall("/api/wallet/withdraw", req, isWalletSummary, signal);
+}
+
+/** POST /api/wallet/autosave — weekly null stops; a number changes an existing schedule's amount. */
+export function walletAutosave(req: WalletAutosaveRequest, signal?: AbortSignal): Promise<WalletSummary> {
+  return walletCall("/api/wallet/autosave", req, isWalletSummary, signal);
+}
+
+/** Stops every auto-save of the wallet (e.g. when Premium is turned off). Money already saved stays. */
+export function stopAllAutosaves(token: string, signal?: AbortSignal): Promise<WalletSummary> {
+  return walletAutosave({ token, envelopeId: "*", weekly: null }, signal);
 }

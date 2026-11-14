@@ -11,6 +11,7 @@ import { PageSkeleton } from "@/components/app/States";
 import ui from "@/components/app/ui.module.css";
 import { US_CITIES, findCity } from "@/lib/cities";
 import { loadSampleProfile, setProfile, useAppState, useHydrated } from "@/lib/storage";
+import { parseTgPayload } from "@/lib/telegram-payload";
 import { CATEGORIES, CATEGORY_LABELS, WEEKS_PER_MONTH, type Category, type City, type Profile } from "@/lib/types";
 import styles from "./onboarding.module.css";
 
@@ -110,6 +111,14 @@ function draftFrom(profile: Profile | undefined): Draft {
     vacation: String(profile.vacationDaysLeft),
     months: profile.preferredMonths.length === 12 ? [] : profile.preferredMonths,
   };
+}
+
+/** `?tg=<payload>` from the Telegram bot's "Open Livento": prefills city and interests (no saved profile only). */
+function withTelegramPrefill(draft: Draft, tg: string | null): Draft {
+  const target = parseTgPayload(tg);
+  if (!target) return draft;
+  const city: CityChoice = { name: target.city.name, state: target.city.state, lat: target.city.lat, lng: target.city.lng };
+  return { ...draft, interests: target.interests, city, cityQuery: cityLabel(city) };
 }
 
 /** Parses a whole-ish dollar/day amount; null when empty or out of range. */
@@ -252,10 +261,12 @@ function CityCombobox({ inputId, value, describedBy, invalid, onQueryChange, onS
 // Wizard
 // ---------------------------------------------------------------------------
 
-function Wizard() {
+function Wizard({ tg }: { tg: string | null }) {
   const router = useRouter();
   const { profile: existing } = useAppState();
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(existing));
+  const [draft, setDraft] = useState<Draft>(() =>
+    existing ? draftFrom(existing) : withTelegramPrefill(draftFrom(existing), tg),
+  );
   const [step, setStep] = useState(0);
   // Furthest step reached, so "Your answers so far" keeps later answers when the user goes back.
   // A saved profile means every answer is already given.
@@ -874,5 +885,5 @@ export function OnboardingView() {
 
   if (wantsSample) return <PageSkeleton label="Loading the sample profile…" />;
   if (!hydrated) return <PageSkeleton label="Loading onboarding…" />;
-  return <Wizard />;
+  return <Wizard tg={params.get("tg")} />;
 }

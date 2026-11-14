@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   // ?id=<livento id> — one event (shared links, alert emails); same response shape.
   const id = sp.get("id")?.trim();
   if (id !== undefined) {
-    if (!/^(tm|cur|smp)_[\w-]{1,120}$/.test(id)) return apiError("Invalid request: check \"id\".", 400);
+    if (!/^(tm|tsdb|cur|smp)_[\w-]{1,120}$/.test(id)) return apiError("Invalid request: check \"id\".", 400);
     try {
       const event = await findEventById(id);
       if (!event) return apiError("We couldn't find that event. It may have ended or been removed.", 404);

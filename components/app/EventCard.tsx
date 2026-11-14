@@ -79,6 +79,11 @@ export function EventCard({
           <span>{categoryLabel(event.category)}</span>
           {event.source === "sample" ? <span className="tag sample">Sample data</span> : null}
           {event.source === "curated" ? <span className="tag">Curated</span> : null}
+          {event.source === "thesportsdb" ? (
+            <span className="tag" title="Event data: TheSportsDB">
+              TheSportsDB
+            </span>
+          ) : null}
           {liked ? <span className={styles.likedMark}>Liked</span> : null}
         </div>
 

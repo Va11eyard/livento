@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/alerts",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/autosave",
+      "schedule": "0 14 * * *"
     }
   ]
 }

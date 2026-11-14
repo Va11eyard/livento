@@ -84,7 +84,7 @@ function SavingsPlan({
     logInteraction({ anonId: getAppState().anonId, eventId: event.id, action: "save" });
     notify(
       envelope ? "Envelope updated" : "Envelope created",
-      envelope ? `New target: ${usd0(plan.total)}.` : "Log money as you set it aside on the Envelopes page.",
+      envelope ? `New target: ${usd0(plan.total)}.` : "Add money to it by card in your wallet.",
     );
   };
 
@@ -111,10 +111,10 @@ function SavingsPlan({
       </p>
       {envelope ? (
         <>
-          <EnvelopeBar balance={balance} target={envelope.target} label={`Set aside for ${event.name}`} />
+          <EnvelopeBar balance={balance} target={envelope.target} label={`In your wallet for ${event.name}`} />
           <div className={ui.actions}>
             <Link href="/envelopes" className="pill small">
-              Log money in Envelopes <span aria-hidden="true">↗</span>
+              Add money in your wallet <span aria-hidden="true">↗</span>
             </Link>
             {Math.round(envelope.target) !== Math.round(plan.total) ? (
               <button type="button" className="pill small alt" onClick={save}>
@@ -130,7 +130,7 @@ function SavingsPlan({
           </button>
         </div>
       )}
-      <p className="help">Your money stays in your own bank. Livento only tracks it.</p>
+      <p className="help">The money goes into your Livento wallet. Stripe test mode: no real money moves.</p>
     </div>
   );
 }
@@ -289,6 +289,7 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
           <div className={styles.tagRow}>
             {event.source === "sample" ? <span className="tag sample">Sample data</span> : null}
             {event.source === "curated" ? <span className="tag">Curated</span> : null}
+            {event.source === "thesportsdb" ? <span className="tag">TheSportsDB</span> : null}
             {event.priceNote ? <span className={ui.meta}>{event.priceNote}</span> : null}
           </div>
           <div className={ui.actions}>
@@ -308,6 +309,14 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
           </div>
           {event.source === "ticketmaster" ? (
             <p className={styles.attribution}>{event.attribution || "Event data: Ticketmaster"}</p>
+          ) : null}
+          {event.source === "thesportsdb" ? (
+            <p className={styles.attribution}>
+              Event data:{" "}
+              <a href="https://www.thesportsdb.com" target="_blank" rel="noopener noreferrer">
+                TheSportsDB<span className="sr-only"> (opens in a new tab)</span>
+              </a>
+            </p>
           ) : null}
         </div>
       </header>
@@ -400,7 +409,7 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
         ) : (
           <PremiumGate
             title="Turn this cost into a plan"
-            description={`See how much to set aside each week to be ready by ${deadlineText(plan)}, track it in an envelope, compare it with another event and get a dated roadmap.`}
+            description={`See how much to save each week to be ready by ${deadlineText(plan)}, keep it in your Livento wallet with automatic weekly saving, compare it with another event and get a dated roadmap.`}
           />
         )}
       </section>
