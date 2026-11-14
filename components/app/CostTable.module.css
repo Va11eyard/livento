@@ -1,0 +1,146 @@
+.table {
+  border-top: 1px solid var(--ink);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(88px, auto);
+  grid-template-areas:
+    "head inputs amount"
+    "note inputs amount";
+  align-items: center;
+  gap: 4px 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.head {
+  grid-area: head;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.label {
+  font: 650 16px / 1.25 var(--font-ui);
+}
+
+.note {
+  grid-area: note;
+  font-size: 13px;
+  color: var(--ink-soft);
+  align-self: start;
+}
+
+.inputs {
+  grid-area: inputs;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+.field label {
+  font: 650 12px var(--font-ui);
+  color: var(--ink-soft);
+}
+.field input {
+  width: 104px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.times {
+  padding-bottom: 11px;
+  color: var(--ink-soft);
+}
+
+.amount {
+  grid-area: amount;
+  text-align: right;
+  font: 650 20px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 0 8px;
+}
+
+.totalLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 650 18px var(--font-ui);
+}
+
+.totalValue {
+  font: 610 clamp(36px, 4.4vw, 56px) / 1 var(--font-ui);
+  letter-spacing: -0.045em;
+}
+
+.weekly {
+  font-size: 16px;
+  max-width: 60ch;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 14px;
+}
+
+.footnote {
+  flex: 1 1 320px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.reset {
+  border: 0;
+  padding: 6px 0;
+  background: none;
+  font: 650 14px var(--font-ui);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.reset:hover:not(:disabled) {
+  background: var(--yellow);
+}
+.reset:disabled {
+  color: var(--ink-soft);
+  text-decoration: none;
+  cursor: default;
+}
+
+@media (max-width: 767px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "head amount"
+      "note note"
+      "inputs inputs";
+  }
+  .inputs {
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .field input {
+    width: 120px;
+  }
+}

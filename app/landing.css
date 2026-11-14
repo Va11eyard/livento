@@ -1,0 +1,629 @@
+/*
+ * Livento landing page: a port of the Loop Dept reference (docs/reference/loop-dept/style.css).
+ * Every selector is scoped under .lv-landing: global CSS imported by a page stays loaded after
+ * client-side navigation, so unscoped rules would leak into the app screens.
+ * Tokens and shared utilities (.wrap .skip .brand .kicker .display .section .pill .tag) live in
+ * app/globals.css.
+ */
+
+/* ---------------------------------------------------------------- header */
+
+.lv-landing .site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  background: #fff;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.lv-landing .nav {
+  height: var(--nav-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lv-landing .nav nav {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.lv-landing .nav nav a {
+  font: 650 15px var(--font-ui);
+}
+
+.lv-landing .nav nav a:hover,
+.lv-landing .rail-links a:hover,
+.lv-landing .explore:hover,
+.lv-landing .end a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.lv-landing .menu {
+  display: none;
+  border: 0;
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ hero */
+
+.lv-landing .hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.lv-landing .hero-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: max(730px, 100svh);
+  padding-top: clamp(89px, 10.2vh, 132px);
+  padding-bottom: clamp(32px, 5vh, 58px);
+}
+
+.lv-landing .top,
+.lv-landing .hero-foot {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * The reference sizes a 9-letter word with min(23.4vw, 34vh). "Livento" is 7 letters (2.82em vs
+ * 3.84em wide in Oswald 600), so the width term is larger to keep the same edge-to-edge feel.
+ * The 34vh height cap is unchanged, so the hero still fits the viewport.
+ */
+.lv-landing .wordmark {
+  margin: 0 0 0.12em -0.034em;
+  font: 600 clamp(108px, min(30vw, 34vh), 420px) / 0.93 var(--font-display);
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
+  color: #090909;
+}
+
+.lv-landing .rails {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: clamp(30px, 8vw, 120px);
+  font: 680 14px / 1.48 var(--font-ui);
+  text-transform: uppercase;
+}
+
+.lv-landing .rail-links {
+  display: grid;
+  align-content: start;
+  text-align: right;
+}
+
+.lv-landing .hero-foot {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 70px;
+}
+
+.lv-landing .hero-foot h2 {
+  max-width: 22ch;
+  font: 600 clamp(26px, 2.28vw, 34px) / 1.08 var(--font-ui);
+  letter-spacing: -0.045em;
+}
+
+.lv-landing .hero-foot p {
+  max-width: 40ch;
+  font-size: clamp(16px, 1.28vw, 19px);
+  line-height: 1.37;
+}
+
+.lv-landing .actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 21px;
+}
+
+/* ----------------------------------------------------- stage and trail */
+
+.lv-landing .stage,
+.lv-landing .trail {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lv-landing .stage {
+  z-index: 2;
+}
+
+.lv-landing .trail {
+  z-index: 3;
+}
+
+.lv-landing .intro-card {
+  position: absolute;
+  top: 49%;
+  left: 62%;
+  width: clamp(150px, 16vw, 238px);
+  transform: translate(-50%, -50%) rotate(6deg);
+  transition: opacity 0.2s;
+  animation: lv-arrive 0.75s cubic-bezier(0.19, 1, 0.22, 1) both;
+}
+
+.lv-landing .intro-card img,
+.lv-landing .stamp img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Same 384:336 frame as the stamps (the photo itself is 4:3). */
+.lv-landing .intro-card img {
+  height: auto;
+  aspect-ratio: 384 / 336;
+}
+
+.lv-landing .intro-card img,
+.lv-landing .stamp {
+  box-shadow: 0 3px 12px #0002;
+}
+
+.lv-landing .intro-card span {
+  display: block;
+  text-align: right;
+  color: #181818;
+  font: 650 12px / 1.6 var(--font-ui);
+  text-transform: uppercase;
+}
+
+.lv-landing .active-trail .intro-card {
+  opacity: 0;
+}
+
+/* Stamps are created by components/landing/Trail.tsx. */
+.lv-landing .stamp {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(128px, 16vw, 238px);
+  aspect-ratio: 384 / 336;
+  overflow: hidden;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.lv-landing .experiment {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 9px;
+  margin-block: clamp(20px, 5vh, 65px);
+  font: 600 14px var(--font-ui);
+}
+
+.lv-landing .experiment button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--yellow);
+  padding: 10px 14px;
+  font: inherit;
+}
+
+.lv-landing .experiment i {
+  width: 0;
+  height: 0;
+  border-block: 4px solid transparent;
+  border-left: 6px solid currentColor;
+}
+
+.lv-landing .hint {
+  color: var(--ink-soft);
+}
+
+@keyframes lv-arrive {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -43%) rotate(-2deg) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(6deg);
+  }
+}
+
+/* -------------------------------------------------------- 01 why livento */
+
+.lv-landing .steps,
+.lv-landing .end {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 58px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.lv-landing .steps span {
+  font: 650 clamp(17px, 2vw, 26px) var(--font-ui);
+}
+
+/* --------------------------------------------------------- 02 experiences */
+
+.lv-landing .works {
+  background: var(--surface);
+}
+
+.lv-landing .works .section,
+.lv-landing .dark .section,
+.lv-landing .foot .section {
+  border: 0;
+}
+
+.lv-landing .workgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 54px 24px;
+  margin-top: 40px;
+}
+
+.lv-landing .workgrid article > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1.5;
+  object-fit: cover;
+}
+
+.lv-landing .workgrid article > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 9px;
+  margin: 12px 0 8px;
+}
+
+.lv-landing .workgrid h3,
+.lv-landing .plan h3 {
+  font: 650 clamp(24px, 2.8vw, 40px) var(--font-ui);
+  letter-spacing: -0.06em;
+}
+
+.lv-landing .workgrid article > div span {
+  flex: none;
+  font-size: 14px;
+}
+
+.lv-landing .card-line {
+  max-width: 52ch;
+  margin-bottom: 10px;
+  color: var(--ink-soft);
+}
+
+.lv-landing summary {
+  width: fit-content;
+  font-weight: 600;
+}
+
+.lv-landing details p {
+  max-width: 52ch;
+  margin: 10px 0;
+}
+
+.lv-landing .explore {
+  display: inline-block;
+  margin-bottom: 4px;
+  font: 650 15px var(--font-ui);
+}
+
+/* ------------------------------------------------- 03 how it works (dark) */
+
+.lv-landing .dark {
+  background: var(--ink);
+  color: #fff;
+}
+
+.lv-landing .service-list {
+  margin-top: 42px;
+}
+
+.lv-landing .service-list details {
+  border-top: 1px solid #666;
+  padding: 18px 0;
+}
+
+.lv-landing .service-list summary {
+  width: 100%;
+  font: 550 clamp(25px, 4vw, 50px) / 1.2 var(--font-ui);
+  letter-spacing: -0.045em;
+}
+
+.lv-landing .service-list details[open] summary {
+  color: var(--yellow);
+}
+
+.lv-landing .service-list p {
+  color: #ddd;
+}
+
+/* Outline tag that follows the summary colour (white, yellow when open). */
+.lv-landing .service-list .tag.premium {
+  margin-left: 14px;
+  vertical-align: 0.35em;
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+}
+
+/* ------------------------------------------------------------ 04 pricing */
+
+.lv-landing .plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 54px 24px;
+  margin-top: 48px;
+}
+
+.lv-landing .plan {
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+
+.lv-landing .price {
+  margin-top: 16px;
+  font: 610 clamp(40px, 5.6vw, 78px) / 0.99 var(--font-ui);
+  letter-spacing: -0.055em;
+}
+
+.lv-landing .price small {
+  margin-left: 4px;
+  font-size: 0.34em;
+  letter-spacing: -0.02em;
+}
+
+.lv-landing .price-alt {
+  margin-top: 8px;
+  color: var(--ink-soft);
+}
+
+.lv-landing .plan ul {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+}
+
+.lv-landing .plan li {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+  font: 600 clamp(16px, 1.4vw, 19px) / 1.3 var(--font-ui);
+  letter-spacing: -0.02em;
+}
+
+.lv-landing .plan-note {
+  margin-top: 4px;
+  color: var(--ink-soft);
+}
+
+.lv-landing .plans + .actions {
+  margin-top: 40px;
+}
+
+/* ------------------------------------------------------- footer (yellow) */
+
+.lv-landing .foot {
+  background: var(--yellow);
+}
+
+.lv-landing .foot-copy {
+  max-width: 52ch;
+  margin: 20px 0;
+}
+
+.lv-landing .foot .actions {
+  margin-top: 0;
+}
+
+.lv-landing .end {
+  border-color: #b5af65;
+}
+
+.lv-landing .end a {
+  font-weight: 600;
+}
+
+/* ------------------------------------------------- "Save a wish" dialog */
+
+.lv-landing .wish-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #14141470;
+}
+
+.lv-landing .wish {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 41;
+  width: min(470px, 90vw);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  padding: 32px;
+}
+
+.lv-landing .wish h2 {
+  font: 650 34px var(--font-ui);
+  letter-spacing: -0.03em;
+}
+
+.lv-landing .wish p {
+  margin: 8px 0 20px;
+}
+
+.lv-landing .wish label {
+  font-weight: 600;
+}
+
+.lv-landing .wish textarea {
+  display: block;
+  width: 100%;
+  margin: 6px 0 18px;
+  padding: 10px;
+  border: 1px solid var(--ink);
+  border-radius: 12px;
+  resize: vertical;
+}
+
+.lv-landing .wish .close {
+  float: right;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -12px -12px 0 0;
+  border: 0;
+  background: #fff;
+  font-size: 27px;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------- breakpoints */
+
+@media (max-width: 991px) {
+  .lv-landing .nav .menu {
+    display: block;
+    min-height: 44px;
+    padding: 10px;
+    font: 650 15px var(--font-ui);
+  }
+
+  .lv-landing .nav nav {
+    display: none;
+    position: absolute;
+    inset: var(--nav-h) 0 auto;
+    padding: 18px var(--gut);
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    align-items: flex-start;
+  }
+
+  .lv-landing .nav nav.open {
+    display: flex;
+  }
+
+  .lv-landing .hero-inner {
+    min-height: max(690px, 100svh);
+  }
+}
+
+@media (max-width: 767px) {
+  .lv-landing .hero-inner {
+    min-height: max(760px, 100svh);
+    padding-top: 86px;
+    padding-bottom: 30px;
+  }
+
+  .lv-landing .wordmark {
+    font-size: clamp(84px, 29vw, 200px);
+  }
+
+  .lv-landing .rails {
+    gap: 16px;
+    font-size: 12px;
+  }
+
+  .lv-landing .hero-foot {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .lv-landing .hero-foot h2 {
+    max-width: 22ch;
+    font-size: 30px;
+  }
+
+  .lv-landing .hero-foot p {
+    max-width: 43ch;
+  }
+
+  .lv-landing .intro-card {
+    top: 48%;
+    left: 65%;
+    width: 140px;
+  }
+
+  .lv-landing .stamp {
+    width: 135px;
+  }
+
+  .lv-landing .experiment {
+    margin-top: 90px;
+    margin-bottom: 28px;
+  }
+
+  .lv-landing .hint {
+    display: none;
+  }
+
+  .lv-landing .actions {
+    margin-top: 14px;
+  }
+
+  .lv-landing .workgrid,
+  .lv-landing .plans {
+    grid-template-columns: 1fr;
+  }
+
+  .lv-landing .steps {
+    justify-content: start;
+  }
+
+  .lv-landing .steps strong {
+    width: 100%;
+  }
+
+  .lv-landing .nav nav.open {
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+
+  .lv-landing .end {
+    align-items: flex-start;
+  }
+
+  .lv-landing .end .brand {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .lv-landing .rails {
+    gap: 10px;
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lv-landing .intro-card {
+    animation: none;
+  }
+
+  .lv-landing .stamp {
+    will-change: auto;
+  }
+
+  .lv-landing .stage * {
+    transition: none;
+  }
+}

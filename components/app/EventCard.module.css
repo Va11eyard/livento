@@ -1,0 +1,128 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.media {
+  display: block;
+  aspect-ratio: 1.5;
+  overflow: hidden;
+  background: var(--surface);
+}
+.media img {
+  transition: opacity 0.15s ease;
+}
+.media:hover img {
+  opacity: 0.9;
+}
+
+.body {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+}
+
+.topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font: 650 12px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.likedMark::before {
+  content: "✓ ";
+}
+
+.title {
+  font: 650 clamp(22px, 2.4vw, 32px) / 1.04 var(--font-ui);
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+.title a:hover {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 2px;
+}
+
+.small .title {
+  font-size: clamp(19px, 1.7vw, 23px);
+  letter-spacing: -0.04em;
+}
+
+.meta {
+  font-size: 14px;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.price {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.why {
+  font-size: 15px;
+  line-height: 1.4;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.whyLabel {
+  font: 650 12px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--yellow);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reasons li {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  font-size: 13px;
+}
+
+.attribution {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.skipped {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  font-size: 15px;
+}

@@ -1,40 +1,86 @@
+/*
+ * Livento global tokens and base styles.
+ * Source: the user-supplied "Loop Dept" design reference (see DESIGN.md).
+ * Landing-only styles live in app/landing.css, scoped under .lv-landing.
+ * App screens use CSS modules and these tokens/utilities.
+ */
+
+@font-face {
+  font-family: Oswald;
+  src: url("/assets/fonts/oswald.woff2") format("woff2");
+  font-weight: 200 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: Tasa;
+  src: url("/assets/fonts/tasa.woff2") format("woff2");
+  font-weight: 400 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: Inter;
+  src: url("/assets/fonts/inter.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* color */
+  --ink: #141414;
+  --ink-soft: #616161;
+  --paper: #ffffff;
+  --yellow: #fffa8d;
+  --surface: #f2f2ef;
+  --line: #cccccc;
+  --line-soft: #dededd;
+  --focus: #3461ff;
+  --ok: #1f7a3d;
+  --warn: #8a5a00;
+  --danger: #b3261e;
+
+  /* type */
+  --font-display: Oswald, Impact, sans-serif;
+  --font-ui: Tasa, Arial, sans-serif;
+  --font-body: Inter, Arial, sans-serif;
+
+  /* layout */
+  --gut: clamp(20px, 4.5vw, 72px);
+  --max: 1200px;
+  --nav-h: 59px;
+  --radius: 14px;
+  --radius-pill: 100px;
+
+  font: 16px/1.45 var(--font-body);
+  color: var(--ink);
+  background: var(--paper);
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  height: 100%;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
   margin: 0;
+}
+
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+blockquote,
+figure {
+  margin: 0;
+}
+
+img {
+  max-width: 100%;
 }
 
 a {
@@ -42,8 +88,219 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button,
+summary {
+  cursor: pointer;
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="slider"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Utilities shared by landing and app screens                         */
+/* ------------------------------------------------------------------ */
+
+.wrap {
+  width: min(var(--max), calc(100% - var(--gut) * 2));
+  margin-inline: auto;
+}
+
+.skip {
+  position: fixed;
+  top: -80px;
+  left: 12px;
+  z-index: 50;
+  padding: 12px;
+  background: var(--yellow);
+}
+.skip:focus {
+  top: 12px;
+}
+
+/* Wordmark */
+.brand {
+  font: 650 34px/0.95 var(--font-display);
+  letter-spacing: -2.7px;
+  text-transform: uppercase;
+}
+
+/* "01 / Kicker" label */
+.kicker {
+  font: 650 14px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
+  margin-bottom: 30px;
+}
+
+/* Large display heading */
+.display {
+  font: 610 clamp(40px, 5.6vw, 78px) / 0.99 var(--font-ui);
+  letter-spacing: -0.055em;
+  max-width: 20ch;
+  text-wrap: balance;
+}
+
+/* Smaller heading for app screens */
+.title {
+  font: 610 clamp(30px, 3.6vw, 48px) / 1.02 var(--font-ui);
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.lead {
+  font-size: clamp(16px, 1.28vw, 19px);
+  line-height: 1.37;
+  max-width: 52ch;
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+
+/* Top-bordered section */
+.section {
+  padding-block: clamp(55px, 7vw, 102px);
+  border-top: 1px solid var(--line);
+}
+
+/* Pill buttons */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  border-radius: var(--radius-pill);
+  font: 650 15px/1 var(--font-ui);
+  padding: 13px 18px;
+  min-height: 44px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pill span {
+  font-size: 15px;
+}
+.pill.alt {
+  background: #fff;
+  color: var(--ink);
+}
+.pill.alt span {
+  font-size: 8px;
+}
+.pill:hover {
+  background: var(--yellow);
+  color: var(--ink);
+}
+.pill:disabled,
+.pill[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pill:disabled:hover {
+  background: var(--ink);
+  color: #fff;
+}
+.pill.small {
+  min-height: 36px;
+  padding: 9px 14px;
+  font-size: 14px;
+  gap: 10px;
+}
+
+/* Labels for estimates and samples — required wherever a number is not a fact */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 2px 9px;
+  font: 650 11px/1.6 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.tag.estimate {
+  background: var(--yellow);
+}
+.tag.sample {
+  background: var(--surface);
+  border-style: dashed;
+}
+.tag.premium {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* Form controls */
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field label,
+.label {
+  font: 650 14px var(--font-ui);
+}
+.input,
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  padding: 11px 14px;
+  min-height: 44px;
+}
+.field textarea {
+  resize: vertical;
+}
+.help {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* Visually hidden but available to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

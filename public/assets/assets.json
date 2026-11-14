@@ -1,0 +1,368 @@
+{
+  "$comment": "Livento static assets, verified by scripts/download-assets.mjs (npm run assets). url/bytes/sha256 describe the exact bytes downloaded from url. For processed media, url/bytes/sha256 describe the source download and output describes the committed file generated from it with the listed ffmpeg arguments. Never edit hashes by hand.",
+  "version": 1,
+  "downloaded": "2026-11-14",
+  "assets": [
+    {
+      "path": "fonts/inter.woff2",
+      "url": "https://media.prettysites.io/products/loop-dept/v1/assets/inter.woff2",
+      "bytes": 48256,
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "license": "SIL Open Font License 1.1 (licenses/Inter.txt)"
+    },
+    {
+      "path": "fonts/oswald.woff2",
+      "url": "https://media.prettysites.io/products/loop-dept/v1/assets/oswald.woff2",
+      "bytes": 28488,
+      "sha256": "bd73278ee0c50041b91b4c03d1229e35b501637f46b6409e7da2d3a758446ea5",
+      "license": "SIL Open Font License 1.1 (licenses/Oswald.txt)"
+    },
+    {
+      "path": "fonts/tasa.woff2",
+      "url": "https://media.prettysites.io/products/loop-dept/v1/assets/tasa.woff2",
+      "bytes": 31324,
+      "sha256": "f1f146c134f6b3f174dcec1fd2b6212af6b61fb5172a1f5b41ab435386b547db",
+      "license": "SIL Open Font License 1.1 (licenses/Tasa.txt)"
+    },
+    {
+      "path": "licenses/Inter.txt",
+      "url": "https://media.prettysites.io/products/loop-dept/v1/licenses/Inter.txt",
+      "bytes": 4477,
+      "sha256": "3b0a5fca3d17942cde889069889dedbbbd075e9b599968c82a95f4d944e9b345"
+    },
+    {
+      "path": "licenses/Oswald.txt",
+      "url": "https://media.prettysites.io/products/loop-dept/v1/licenses/Oswald.txt",
+      "bytes": 4388,
+      "sha256": "23916cdee678823c3c517c699cb2e043088de0d46c959eeaa168b54bb84534df"
+    },
+    {
+      "path": "licenses/Tasa.txt",
+      "url": "https://media.prettysites.io/products/loop-dept/v1/licenses/Tasa.txt",
+      "bytes": 4427,
+      "sha256": "df87441a1dc9a42f59e8fdeb6e34a3cfa0be80d956c2955273652cabaeb6b5bc"
+    },
+    {
+      "path": "trail/concert.webp",
+      "url": "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=1600&q=85&fm=jpg",
+      "bytes": 266926,
+      "sha256": "62cdd53f6d7568e0f7182dd1c5d03b553d48b46b55d35da3fc88f24f18721b03",
+      "processed": true,
+      "ffmpeg": [
+        "-i",
+        "{src}",
+        "-vf",
+        "crop=ih*4/3:ih:(iw-ih*4/3)/2:0,scale=800:600:flags=lanczos",
+        "-c:v",
+        "libwebp",
+        "-quality",
+        "80",
+        "-compression_level",
+        "6",
+        "-preset",
+        "photo",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Nainoa Shizuru",
+        "page": "https://unsplash.com/photos/concert-photos-NcdG9mK3PBY",
+        "license": "Unsplash License",
+        "licenseUrl": "https://unsplash.com/license"
+      },
+      "output": {
+        "bytes": 27206,
+        "sha256": "f3bf5ba986fc2ab31c87a3e14c6f6fcb6cf4822d5c6d9efc2cb1f02ea947d15f"
+      }
+    },
+    {
+      "path": "trail/theatre.webp",
+      "url": "https://images.unsplash.com/photo-1503095396549-807759245b35?w=1600&q=85&fm=jpg",
+      "bytes": 170901,
+      "sha256": "46a30ec3f3a24056385cfc66dd6e02d1e74eddf95ed33dfce18329262f65d466",
+      "processed": true,
+      "ffmpeg": [
+        "-i",
+        "{src}",
+        "-vf",
+        "crop=ih*4/3:ih:(iw-ih*4/3)/2:0,scale=800:600:flags=lanczos",
+        "-c:v",
+        "libwebp",
+        "-quality",
+        "80",
+        "-compression_level",
+        "6",
+        "-preset",
+        "photo",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Kyle Head",
+        "page": "https://unsplash.com/photos/silhouette-of-three-performers-on-stage-p6rNTdAPbuk",
+        "license": "Unsplash License",
+        "licenseUrl": "https://unsplash.com/license"
+      },
+      "output": {
+        "bytes": 21548,
+        "sha256": "ee34f6a7baa6c154fb8fececf02d798c7f274720badfed80c7ddb9646ce01e9a"
+      }
+    },
+    {
+      "path": "trail/festival.webp",
+      "url": "https://images.unsplash.com/photo-1787677357235-063a9982610c?w=1600&q=85&fm=jpg",
+      "bytes": 320299,
+      "sha256": "78b1589c6865d5c231f4b15250d31c9bcf682a9d06d1caf29efe5723ba54b1b3",
+      "processed": true,
+      "ffmpeg": [
+        "-i",
+        "{src}",
+        "-vf",
+        "crop=ih*4/3:ih:(iw-ih*4/3)/2:0,scale=800:600:flags=lanczos",
+        "-c:v",
+        "libwebp",
+        "-quality",
+        "80",
+        "-compression_level",
+        "6",
+        "-preset",
+        "photo",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Barney Goodman",
+        "page": "https://unsplash.com/photos/crowd-watching-band-at-music-festival-TRY69Sky9IQ",
+        "license": "Unsplash License",
+        "licenseUrl": "https://unsplash.com/license"
+      },
+      "output": {
+        "bytes": 50362,
+        "sha256": "b148e2122f60a6031c7afd0b11e3b04311f9fa04c717357c93582857a0aa6e82"
+      }
+    },
+    {
+      "path": "trail/cinema.webp",
+      "url": "https://images.unsplash.com/photo-1485095329183-d0797cdc5676?w=1600&q=85&fm=jpg",
+      "bytes": 198480,
+      "sha256": "6998aace2ae6a1524bd54602ba98b6ff555298105983fd71c59f18c70dc59daf",
+      "processed": true,
+      "ffmpeg": [
+        "-i",
+        "{src}",
+        "-vf",
+        "crop=ih*4/3:ih:(iw-ih*4/3)/2:0,scale=800:600:flags=lanczos",
+        "-c:v",
+        "libwebp",
+        "-quality",
+        "80",
+        "-compression_level",
+        "6",
+        "-preset",
+        "photo",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Jake Hills",
+        "page": "https://unsplash.com/photos/cinema-audience-in-dark-theater-23LET4Hxj_U",
+        "license": "Unsplash License",
+        "licenseUrl": "https://unsplash.com/license"
+      },
+      "output": {
+        "bytes": 34170,
+        "sha256": "2f26a890294263141d74e80788ce8482c27cc0b007a91139bd1905900964af3f"
+      }
+    },
+    {
+      "path": "trail/loop-1.gif",
+      "url": "https://videos.pexels.com/video-files/39472140/16813001_2560_1440_30fps.mp4",
+      "bytes": 9754133,
+      "sha256": "acf14c7b0d4b37d7879318be22a29ba0e7de91a4491a59887834decdd0e3f10c",
+      "processed": true,
+      "ffmpeg": [
+        "-ss",
+        "5.4",
+        "-t",
+        "3",
+        "-i",
+        "{src}",
+        "-filter_complex",
+        "[0:v]hqdn3d=4:3:8:8,fps=12,crop=1646:1440:760:0,scale=384:336:flags=lanczos,split[a][b];[a]palettegen=max_colors=64:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle",
+        "-loop",
+        "0",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Sergei Starostin",
+        "page": "https://www.pexels.com/video/dynamic-stage-lighting-with-fog-effects-39472140/",
+        "license": "Pexels License",
+        "licenseUrl": "https://www.pexels.com/license/"
+      },
+      "output": {
+        "bytes": 621315,
+        "sha256": "b54a893df7e522796c1864550c24c18b22cc9e34612771613f27b5ce39bb92bb"
+      }
+    },
+    {
+      "path": "trail/loop-1.webp",
+      "url": "https://videos.pexels.com/video-files/39472140/16813001_2560_1440_30fps.mp4",
+      "bytes": 9754133,
+      "sha256": "acf14c7b0d4b37d7879318be22a29ba0e7de91a4491a59887834decdd0e3f10c",
+      "processed": true,
+      "ffmpeg": [
+        "-ss",
+        "5.4",
+        "-t",
+        "3",
+        "-i",
+        "{src}",
+        "-vf",
+        "hqdn3d=4:3:8:8,fps=12,crop=1646:1440:760:0,scale=384:336:flags=lanczos",
+        "-frames:v",
+        "1",
+        "-c:v",
+        "libwebp",
+        "-quality",
+        "80",
+        "-compression_level",
+        "6",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Sergei Starostin",
+        "page": "https://www.pexels.com/video/dynamic-stage-lighting-with-fog-effects-39472140/",
+        "license": "Pexels License",
+        "licenseUrl": "https://www.pexels.com/license/"
+      },
+      "output": {
+        "bytes": 4572,
+        "sha256": "24f15d3834384d0cb609d1f6d7926a55c034cb47be0370af76d5d14af10fb5d5"
+      }
+    },
+    {
+      "path": "trail/loop-2.gif",
+      "url": "https://videos.pexels.com/video-files/34636825/14680502_1440_2560_30fps.mp4",
+      "bytes": 56465245,
+      "sha256": "3c023c0cf5844166bed640c12c2efce0a8bbfdc07ecc2d4ebea22f979ae3a78a",
+      "processed": true,
+      "ffmpeg": [
+        "-t",
+        "2",
+        "-i",
+        "{src}",
+        "-filter_complex",
+        "[0:v]hqdn3d=6:4:12:12,fps=10,crop=1440:1260:0:1100,scale=384:336:flags=lanczos,gblur=sigma=0.6,split[a][b];[a]palettegen=max_colors=42:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle",
+        "-loop",
+        "0",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Belén Montero",
+        "page": "https://www.pexels.com/video/energetic-night-concert-with-confetti-34636825/",
+        "license": "Pexels License",
+        "licenseUrl": "https://www.pexels.com/license/"
+      },
+      "output": {
+        "bytes": 662113,
+        "sha256": "1ccc1b3f75efb0942b80513a0acb389e93dfc71d2d2386866ad193099326d527"
+      }
+    },
+    {
+      "path": "trail/loop-2.webp",
+      "url": "https://videos.pexels.com/video-files/34636825/14680502_1440_2560_30fps.mp4",
+      "bytes": 56465245,
+      "sha256": "3c023c0cf5844166bed640c12c2efce0a8bbfdc07ecc2d4ebea22f979ae3a78a",
+      "processed": true,
+      "ffmpeg": [
+        "-t",
+        "2",
+        "-i",
+        "{src}",
+        "-vf",
+        "hqdn3d=6:4:12:12,fps=10,crop=1440:1260:0:1100,scale=384:336:flags=lanczos",
+        "-frames:v",
+        "1",
+        "-c:v",
+        "libwebp",
+        "-quality",
+        "80",
+        "-compression_level",
+        "6",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Belén Montero",
+        "page": "https://www.pexels.com/video/energetic-night-concert-with-confetti-34636825/",
+        "license": "Pexels License",
+        "licenseUrl": "https://www.pexels.com/license/"
+      },
+      "output": {
+        "bytes": 11510,
+        "sha256": "069ccbda6663fc5a5d8544b4acaf7b8f27a38089135750dfbf38e3ffe3f9a887"
+      }
+    },
+    {
+      "path": "trail/loop-3.gif",
+      "url": "https://videos.pexels.com/video-files/3116508/3116508-hd_1920_1080_25fps.mp4",
+      "bytes": 16840166,
+      "sha256": "0057fb6b3fd3ec92cfb7061661bf5dbcd7c838febd761845c2330d7a3636bcfa",
+      "processed": true,
+      "ffmpeg": [
+        "-ss",
+        "5",
+        "-t",
+        "1.75",
+        "-i",
+        "{src}",
+        "-filter_complex",
+        "[0:v]hqdn3d=6:4:12:12,fps=12,crop=1234:1080:560:0,scale=384:336:flags=lanczos,split[a][b];[a]palettegen=max_colors=48:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle",
+        "-loop",
+        "0",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Atakan Ozkan",
+        "page": "https://www.pexels.com/video/vinyl-record-spinning-3116508/",
+        "license": "Pexels License",
+        "licenseUrl": "https://www.pexels.com/license/"
+      },
+      "output": {
+        "bytes": 565108,
+        "sha256": "8b2025277bf5855a2eebfb2e27019a81c34df14a95777c8ba9b9af8919de00db"
+      }
+    },
+    {
+      "path": "trail/loop-3.webp",
+      "url": "https://videos.pexels.com/video-files/3116508/3116508-hd_1920_1080_25fps.mp4",
+      "bytes": 16840166,
+      "sha256": "0057fb6b3fd3ec92cfb7061661bf5dbcd7c838febd761845c2330d7a3636bcfa",
+      "processed": true,
+      "ffmpeg": [
+        "-ss",
+        "5",
+        "-t",
+        "1.75",
+        "-i",
+        "{src}",
+        "-vf",
+        "hqdn3d=6:4:12:12,fps=12,crop=1234:1080:560:0,scale=384:336:flags=lanczos",
+        "-frames:v",
+        "1",
+        "-c:v",
+        "libwebp",
+        "-quality",
+        "80",
+        "-compression_level",
+        "6",
+        "{out}"
+      ],
+      "credit": {
+        "creator": "Atakan Ozkan",
+        "page": "https://www.pexels.com/video/vinyl-record-spinning-3116508/",
+        "license": "Pexels License",
+        "licenseUrl": "https://www.pexels.com/license/"
+      },
+      "output": {
+        "bytes": 3388,
+        "sha256": "6f687dcc10819f5e1c48ca12851a3004b3c062edc5645d98ec5d08b7a44733f0"
+      }
+    }
+  ]
+}

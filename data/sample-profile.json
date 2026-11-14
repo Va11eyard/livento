@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "interests": ["music", "festivals", "comedy", "theatre"],
+  "favourites": ["indie rock", "jazz", "stand-up comedy"],
+  "city": "Chicago",
+  "stateCode": "IL",
+  "lat": 41.8781,
+  "lng": -87.6298,
+  "radiusMiles": 30,
+  "monthlyFunBudget": 150,
+  "hotelPerNight": 140,
+  "travelPerTrip": 180,
+  "vacationDaysLeft": 8,
+  "preferredMonths": [3, 4, 5, 6, 7, 8, 9, 10],
+  "liked": [],
+  "skipped": [],
+  "likedTags": [],
+  "isSample": true,
+  "createdAt": "2026-11-14T00:00:00.000Z"
+}

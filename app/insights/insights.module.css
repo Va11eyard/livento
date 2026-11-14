@@ -1,0 +1,277 @@
+.upload {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px 32px;
+}
+
+.uploadText {
+  display: grid;
+  gap: 8px;
+}
+
+.uploadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* The visually hidden file input still takes keyboard focus: show the ring on its label. */
+.uploadActions label:has(+ input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.disabledLabel {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.privacy {
+  grid-column: 1 / -1;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.output {
+  margin-top: clamp(28px, 4vw, 44px);
+}
+
+.loading {
+  display: grid;
+  gap: 16px;
+}
+
+.results {
+  display: grid;
+  gap: 20px;
+}
+
+.resultHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.h2 {
+  margin-bottom: 20px;
+}
+
+/* KPI tiles (proportional figures for big numbers) */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tile {
+  display: grid;
+  gap: 6px;
+  padding: 20px 22px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+}
+
+.tileLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font: 650 14px var(--font-ui);
+}
+
+.tileValue {
+  font: 610 clamp(32px, 3.6vw, 48px) / 1 var(--font-ui);
+  letter-spacing: -0.045em;
+}
+
+/* Equivalents */
+.equivalents {
+  display: grid;
+  gap: 14px;
+}
+
+.equivalent {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.equivalentAction {
+  margin-top: 14px;
+}
+
+.neutral {
+  margin-top: 12px;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 14px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatchImpulse,
+.swatchRest {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+.swatchImpulse {
+  background: var(--ink);
+}
+.swatchRest {
+  background: var(--ink-soft);
+}
+
+/* Tables */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.table th,
+.table td {
+  padding: 12px 10px 12px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+.table thead th {
+  font: 650 13px var(--font-ui);
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--ink);
+}
+.table tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.share {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.chartCol {
+  width: 46%;
+}
+
+/* Bar: 12px thick, square at the baseline, 4px rounded data-end, 2px surface gap between segments */
+.bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+}
+.segImpulse,
+.segRest {
+  flex-basis: 0;
+  min-width: 2px;
+}
+.segImpulse {
+  background: var(--ink);
+}
+.segRest {
+  background: var(--ink-soft);
+}
+.bar > :last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(32px, 4vw, 56px);
+}
+
+/* Ranked category bars (meter list) */
+.rank {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--ink);
+}
+.rank li {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.9fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.rankName {
+  font-weight: 600;
+}
+
+.rankTrack {
+  display: block;
+}
+
+.rankBar {
+  display: block;
+  height: 10px;
+  border-radius: 0 4px 4px 0;
+  background: var(--ink);
+}
+
+.rankValue {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.merchants {
+  border-top: 0;
+}
+
+.method {
+  margin-top: 8px;
+  max-width: 80ch;
+}
+
+@media (max-width: 991px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .upload {
+    grid-template-columns: 1fr;
+  }
+  .tiles {
+    grid-template-columns: 1fr;
+  }
+  .chartCol {
+    width: 34%;
+  }
+  .rank li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .rankTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* Safety net on narrow screens: tables scroll inside their box, never the page. */
+.tableWrap {
+  overflow-x: auto;
+}

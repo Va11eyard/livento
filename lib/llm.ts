@@ -1,0 +1,385 @@
+/**
+ * Claude integration (server-only). The LLM only re-orders and writes words:
+ * it never produces a price or a date, and every output is validated here —
+ * anything off-contract returns null so callers fall back to rules.
+ *
+ * - Model `claude-opus-5-5`; thinking is always on for this model, so no
+ *   `thinking` param — depth is set with `output_config.effort`.
+ * - Structured outputs via `output_config.format` (zod schema) + our own zod
+ *   validation of the final text block.
+ * - Server-side refusal fallbacks (`fallbacks: "default"`, beta
+ *   `server-side-fallback-2026-07-01`) on `client.beta.messages.create`. If the
+ *   beta is rejected (400) the GA endpoint is used instead.
+ * - The client is created lazily, only when ANTHROPIC_API_KEY is set.
+ */
+import Anthropic from "@anthropic-ai/sdk";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
+import { SPEND_CATEGORIES } from "./impulse";
+import { CATEGORY_LABELS, type LiventoEvent, type Profile, type RoadmapStep } from "./types";
+
+export const LLM_MODEL = "claude-opus-5-5";
+const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+
+const TIMEOUTS = { rerank: 12_000, classify: 12_000, roadmap: 20_000 } as const;
+
+let client: Anthropic | undefined;
+let betaFallbacksRejected = false;
+
+export function isLlmConfigured(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+function getClient(): Anthropic | null {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) return null;
+  client ??= new Anthropic({ apiKey, maxRetries: 1 });
+  return client;
+}
+
+function parseJson<S extends z.ZodType>(schema: S, text: string): z.infer<S> | null {
+  if (!text.trim()) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const result = schema.safeParse(data);
+  return result.success ? result.data : null;
+}
+
+function describeError(err: unknown): string {
+  if (err instanceof Anthropic.APIError) return `${err.name} ${err.status ?? ""}`.trim();
+  if (err instanceof Error) return err.name;
+  return "unknown error";
+}
+
+interface StructuredCall<S extends z.ZodType> {
+  label: string;
+  schema: S;
+  system: string;
+  user: string;
+  effort: "low" | "medium";
+  maxTokens: number;
+  timeoutMs: number;
+}
+
+/** One structured-output request with refusal fallbacks; null on any failure. */
+async function structuredCall<S extends z.ZodType>(call: StructuredCall<S>): Promise<z.infer<S> | null> {
+  const anthropic = getClient();
+  if (!anthropic) return null;
+  // One overall deadline covers the beta attempt, a possible GA retry and SDK retries.
+  const signal = AbortSignal.timeout(call.timeoutMs);
+  const requestOptions = { timeout: call.timeoutMs, signal };
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: call.user }];
+
+  try {
+    if (!betaFallbacksRejected) {
+      try {
+        const msg = await anthropic.beta.messages.create(
+          {
+            model: LLM_MODEL,
+            max_tokens: call.maxTokens,
+            betas: [FALLBACK_BETA],
+            fallbacks: "default",
+            system: call.system,
+            messages,
+            output_config: { effort: call.effort, format: betaZodOutputFormat(call.schema) },
+          },
+          requestOptions,
+        );
+        if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return null;
+        // The final answer is the text after the last fallback switch point (if any).
+        let start = 0;
+        msg.content.forEach((block, i) => {
+          if (block.type === "fallback") start = i + 1;
+        });
+        const text = msg.content
+          .slice(start)
+          .map((block) => (block.type === "text" ? block.text : ""))
+          .join("");
+        return parseJson(call.schema, text);
+      } catch (err) {
+        if (!(err instanceof Anthropic.BadRequestError)) throw err;
+        console.warn(`[llm] ${call.label}: beta request rejected (400); retrying on the GA endpoint`);
+      }
+    }
+
+    const msg = await anthropic.messages.create(
+      {
+        model: LLM_MODEL,
+        max_tokens: call.maxTokens,
+        system: call.system,
+        messages,
+        output_config: { effort: call.effort, format: zodOutputFormat(call.schema) },
+      },
+      requestOptions,
+    );
+    if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return null;
+    const text = msg.content.map((block) => (block.type === "text" ? block.text : "")).join("");
+    const parsed = parseJson(call.schema, text);
+    // The GA retry worked where the beta 400'd: skip the beta path from now on.
+    if (parsed !== null && !betaFallbacksRejected) betaFallbacksRejected = true;
+    return parsed;
+  } catch (err) {
+    console.warn(`[llm] ${call.label} failed: ${describeError(err)}`);
+    return null;
+  }
+}
+
+const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max - 1);
+  const atSpace = cut.lastIndexOf(" ");
+  return `${(atSpace > max * 0.6 ? cut.slice(0, atSpace) : cut).replace(/[\s,;:.\-–—]+$/, "")}…`;
+}
+
+// ---------------------------------------------------------------------------
+// 1. Re-rank recommendations
+// ---------------------------------------------------------------------------
+
+export interface RerankCandidate {
+  event: LiventoEvent;
+  score: number;
+  reasons: string[];
+  trip?: boolean;
+  factors?: { price?: number; date?: number };
+}
+
+const RerankSchema = z.object({
+  picks: z.array(
+    z.object({
+      id: z.string().describe("An id from the candidate list"),
+      why: z.string().describe("One line, max 110 characters, no digits, prices or dates"),
+    }),
+  ),
+});
+
+const RERANK_SYSTEM = [
+  "You are the recommendation editor for Livento, an app that helps people in the US plan and save for live experiences.",
+  "You get one person's stated tastes and candidate events that rules have already scored.",
+  "Choose the best picks for this person, best first. When candidates are close, prefer a varied mix over many of the same kind.",
+  "For each pick write one 'why this' line: at most 110 characters, warm, concrete and specific to the person's stated tastes.",
+  "Rules: use only ids from the candidate list, each at most once. Base every line only on the facts given.",
+  "Never invent artists, lineups, venues, reviews or popularity. Never write digits, prices, dollar amounts, distances or dates.",
+  "Plain text only: no emojis, no hashtags, no markdown.",
+].join("\n");
+
+/** Picks the best (≤ 8) of ≤ 20 candidates with one "why" each; null on failure. Empty `why` = use the template. */
+export async function rerankWithLLM(
+  profile: Profile,
+  candidates: RerankCandidate[],
+): Promise<{ eventId: string; why: string }[] | null> {
+  const pool = candidates.slice(0, 20);
+  if (!isLlmConfigured() || pool.length === 0) return null;
+  const pickCount = Math.min(8, pool.length);
+  const ids = new Set(pool.map((c) => c.event.id));
+
+  const user = JSON.stringify({
+    person: {
+      interests: profile.interests.map((c) => CATEGORY_LABELS[c]),
+      favourites: profile.favourites.slice(0, 12),
+      home: [profile.city, profile.stateCode].filter(Boolean).join(", "),
+    },
+    pickCount,
+    candidates: pool.map((c) => ({
+      id: c.event.id,
+      name: c.event.name,
+      category: CATEGORY_LABELS[c.event.category],
+      genre: [c.event.genre, c.event.subGenre].filter(Boolean).join(" / ") || undefined,
+      tags: c.event.tags.slice(0, 8),
+      place: [c.event.city, c.event.state].filter(Boolean).join(", "),
+      travel: c.trip === undefined ? undefined : c.trip ? "needs a trip" : "local",
+      fitsBudget: c.factors?.price === undefined ? undefined : c.factors.price >= 1 ? "yes" : c.factors.price === 0.5 ? "unknown" : "no",
+      inPreferredMonth: c.factors?.date === undefined ? undefined : c.factors.date >= 1,
+      sampleEvent: c.event.source === "sample" || undefined,
+      ruleReasons: c.reasons.filter((r) => !/[\d$]/.test(r)).slice(0, 4),
+      ruleScore: Math.round(c.score * 100) / 100,
+    })),
+  });
+
+  const out = await structuredCall({
+    label: "rerank",
+    schema: RerankSchema,
+    system: RERANK_SYSTEM,
+    user: `Pick the best ${pickCount} for this person.\n${user}`,
+    effort: "low",
+    maxTokens: 3_000,
+    timeoutMs: TIMEOUTS.rerank,
+  });
+  if (!out) return null;
+
+  const seen = new Set<string>();
+  const picks: { eventId: string; why: string }[] = [];
+  for (const p of out.picks) {
+    const id = p.id.trim();
+    if (!ids.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    let why = tidy(p.why);
+    if (/[\d$]/.test(why) || why.length < 8) why = ""; // numbers come from rules only
+    picks.push({ eventId: id, why: why ? truncate(why, 120) : "" });
+    if (picks.length === pickCount) break;
+  }
+  return picks.length ? picks : null;
+}
+
+// ---------------------------------------------------------------------------
+// 2. Polish roadmap text
+// ---------------------------------------------------------------------------
+
+const RoadmapSchema = z.object({
+  steps: z.array(
+    z.object({
+      index: z.number().int(),
+      title: z.string(),
+      detail: z.string(),
+    }),
+  ),
+});
+
+const ROADMAP_SYSTEM = [
+  "You are the trip-planning writer for Livento. You rewrite the wording of a roadmap that rules already computed.",
+  "Rewrite each step's title and detail so it reads clearly and warmly for this specific event.",
+  "Rules: return every step index exactly once. Keep every number, dollar amount, date, time and name exactly as written in that step.",
+  "Do not add any new numbers, dates, weekdays, prices, links, places or facts. Do not promise availability or prices.",
+  "Title: at most 70 characters. Detail: at most 260 characters. Plain text only: no markdown, no emojis.",
+].join("\n");
+
+const MONTH_WORDS = [
+  ["january", "jan"], ["february", "feb"], ["march", "mar"], ["april", "apr"], ["may"], ["june", "jun"],
+  ["july", "jul"], ["august", "aug"], ["september", "sep", "sept"], ["october", "oct"], ["november", "nov"], ["december", "dec"],
+];
+const WEEKDAYS = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi;
+
+function numbersIn(text: string): Set<string> {
+  return new Set((text.match(/\d+(?:[.,]\d+)*/g) ?? []).map((n) => n.replace(/,/g, "")));
+}
+
+function monthsIn(text: string): Set<number> {
+  const found = new Set<number>();
+  const lowerText = text.toLowerCase();
+  MONTH_WORDS.forEach((forms, i) => {
+    if (forms.some((f) => new RegExp(`\\b${f}\\b`).test(lowerText))) found.add(i + 1);
+  });
+  return found;
+}
+
+/** True when the rewrite adds no number, month or weekday that the original step didn't have. */
+function preservesFacts(original: RoadmapStep, rewritten: string): boolean {
+  const source = `${original.title} ${original.detail}`;
+  const allowedNumbers = numbersIn(source);
+  const allowedMonths = monthsIn(source);
+  if (original.date) {
+    const [y, m, d] = original.date.split("-");
+    allowedNumbers.add(y);
+    allowedNumbers.add(String(Number(d)));
+    allowedNumbers.add(d);
+    allowedMonths.add(Number(m));
+  }
+  for (const n of numbersIn(rewritten)) if (!allowedNumbers.has(n)) return false;
+  for (const m of monthsIn(rewritten)) if (!allowedMonths.has(m)) return false;
+  const weekdaysBefore = new Set((source.match(WEEKDAYS) ?? []).map((w) => w.toLowerCase()));
+  for (const w of rewritten.match(WEEKDAYS) ?? []) if (!weekdaysBefore.has(w.toLowerCase())) return false;
+  if (/https?:|www\./i.test(rewritten)) return false;
+  return true;
+}
+
+/** Rewrites only title/detail; count, dates, kinds and links are preserved. Null when nothing usable came back. */
+export async function polishRoadmapWithLLM(
+  event: LiventoEvent,
+  profile: Profile,
+  steps: RoadmapStep[],
+): Promise<RoadmapStep[] | null> {
+  if (!isLlmConfigured() || steps.length === 0 || steps.length > 20) return null;
+  const user = JSON.stringify({
+    event: {
+      name: event.name,
+      category: CATEGORY_LABELS[event.category],
+      place: [event.venue, event.city, event.state].filter(Boolean).join(", "),
+      sampleEvent: event.source === "sample" || undefined,
+    },
+    traveler: { home: [profile.city, profile.stateCode].filter(Boolean).join(", ") },
+    steps: steps.map((s, index) => ({ index, kind: s.kind, date: s.date, title: s.title, detail: s.detail })),
+  });
+
+  const out = await structuredCall({
+    label: "roadmap",
+    schema: RoadmapSchema,
+    system: ROADMAP_SYSTEM,
+    user: `Rewrite these ${steps.length} steps.\n${user}`,
+    effort: "medium",
+    maxTokens: 4_000,
+    timeoutMs: TIMEOUTS.roadmap,
+  });
+  if (!out || out.steps.length !== steps.length) return null;
+
+  const byIndex = new Map<number, { title: string; detail: string }>();
+  for (const s of out.steps) {
+    if (s.index < 0 || s.index >= steps.length || byIndex.has(s.index)) return null;
+    byIndex.set(s.index, s);
+  }
+
+  let changed = 0;
+  const result = steps.map((original, i) => {
+    const s = byIndex.get(i);
+    if (!s) return original;
+    const title = tidy(s.title);
+    const detail = tidy(s.detail);
+    if (title.length < 3 || title.length > 90 || detail.length < 8 || detail.length > 320) return original;
+    if (!preservesFacts(original, `${title} ${detail}`)) return original;
+    changed++;
+    return { ...original, title, detail };
+  });
+  return changed > 0 ? result : null;
+}
+
+// ---------------------------------------------------------------------------
+// 3. Classify ambiguous merchants
+// ---------------------------------------------------------------------------
+
+const MerchantSchema = z.object({
+  items: z.array(
+    z.object({
+      name: z.string(),
+      category: z.enum(SPEND_CATEGORIES),
+      impulse: z.boolean(),
+    }),
+  ),
+});
+
+const MERCHANT_SYSTEM = [
+  "You classify merchant names from US bank statements for a personal budgeting app.",
+  "For each name choose the single best category from the allowed list, and say whether purchases there are likely impulse spending:",
+  "small, discretionary, unplanned buys such as food delivery, snacks, coffee, in-app purchases, small online orders or novelty shopping.",
+  "Essentials (groceries, rent, utilities, insurance, healthcare, commuting) are never impulse. If unsure, use \"Other\" with impulse false.",
+  "Return each given name exactly as written. Do not add names.",
+].join("\n");
+
+/** Category + impulse flag for ≤ 60 merchant names; null on failure. */
+export async function classifyMerchantsWithLLM(
+  names: string[],
+): Promise<Record<string, { category: string; impulse: boolean }> | null> {
+  const unique = [...new Set(names.map(tidy).filter(Boolean))].slice(0, 60);
+  if (!isLlmConfigured() || unique.length === 0) return null;
+  const out = await structuredCall({
+    label: "classify",
+    schema: MerchantSchema,
+    system: MERCHANT_SYSTEM,
+    user: JSON.stringify({ allowedCategories: SPEND_CATEGORIES, merchants: unique }),
+    effort: "low",
+    maxTokens: 4_000,
+    timeoutMs: TIMEOUTS.classify,
+  });
+  if (!out) return null;
+  const wanted = new Set(unique);
+  const map: Record<string, { category: string; impulse: boolean }> = {};
+  for (const item of out.items) {
+    const name = tidy(item.name);
+    if (wanted.has(name)) map[name] = { category: item.category, impulse: item.impulse };
+  }
+  return Object.keys(map).length ? map : null;
+}

@@ -1,0 +1,38 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #14141470;
+}
+
+.content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 71;
+  width: min(470px, 90vw);
+  max-height: 90vh;
+  overflow: auto;
+  transform: translate(-50%, -50%);
+  padding: 32px;
+  border: 1px solid var(--ink);
+  background: #fff;
+}
+.content:focus {
+  outline: none;
+}
+
+.title {
+  font: 650 clamp(26px, 3vw, 34px) / 1.05 var(--font-ui);
+  letter-spacing: -0.04em;
+}
+
+.description {
+  margin: 10px 0 24px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

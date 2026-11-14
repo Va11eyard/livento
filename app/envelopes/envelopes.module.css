@@ -1,0 +1,145 @@
+.total {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+
+.totalLabel {
+  font: 650 13px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.list {
+  display: grid;
+  gap: 20px;
+}
+
+.emptyText {
+  margin: 8px 0 18px;
+}
+
+.card {
+  display: grid;
+  gap: 20px;
+  padding: clamp(20px, 3vw, 32px);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cardIntro {
+  display: grid;
+  gap: 6px;
+}
+
+.cardTitle {
+  font: 650 clamp(22px, 2.4vw, 32px) / 1.05 var(--font-ui);
+  letter-spacing: -0.05em;
+}
+.cardTitle a:hover {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 2px;
+}
+
+.delete {
+  flex: none;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  min-height: 36px;
+  padding: 6px 14px;
+  font: 650 14px var(--font-ui);
+}
+.delete:hover {
+  background: var(--yellow);
+}
+
+.cardBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.deposit {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.depositRow {
+  display: flex;
+  gap: 8px;
+}
+.depositRow input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 200px;
+  font-variant-numeric: tabular-nums;
+}
+
+.history summary {
+  width: fit-content;
+  font: 650 14px var(--font-ui);
+}
+.history ul {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  max-width: 280px;
+}
+.history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+}
+
+.scheduleTitle {
+  font: 650 16px var(--font-ui);
+}
+
+.reminders {
+  display: grid;
+  width: 100%;
+  max-width: 340px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reminders li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 767px) {
+  .cardBody {
+    grid-template-columns: 1fr;
+  }
+  .total {
+    justify-items: start;
+    text-align: left;
+  }
+}

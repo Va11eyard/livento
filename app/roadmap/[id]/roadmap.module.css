@@ -1,0 +1,148 @@
+.crumbs {
+  margin-bottom: 24px;
+  font: 650 15px var(--font-ui);
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font: 650 14px var(--font-ui);
+}
+
+.loading {
+  display: grid;
+  gap: 18px;
+}
+
+/* Accordion rows per DESIGN.md: full width, 1px top rule, TASA summary */
+.steps {
+  border-bottom: 1px solid var(--line);
+}
+
+.step {
+  border-top: 1px solid var(--line);
+}
+
+.stepHeader {
+  margin: 0;
+}
+
+.trigger {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 8px 20px;
+  width: 100%;
+  padding: 20px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.trigger:hover .stepTitle {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 2px;
+}
+
+.when {
+  font: 650 14px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepTitle {
+  font: 550 clamp(20px, 2.4vw, 30px) / 1.15 var(--font-ui);
+  letter-spacing: -0.04em;
+}
+
+.kind {
+  justify-self: end;
+  padding: 2px 10px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  font: 650 11px / 1.6 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.chevron {
+  position: relative;
+  justify-self: end;
+  width: 16px;
+  height: 16px;
+}
+.chevron::before,
+.chevron::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 2px;
+  background: var(--ink);
+  transition: transform 0.15s ease;
+}
+.chevron::after {
+  transform: rotate(90deg);
+}
+.trigger[data-state="open"] .chevron::after {
+  transform: rotate(0deg);
+}
+.trigger[data-state="open"] .when {
+  background: var(--yellow);
+  border-radius: 4px;
+  padding: 1px 6px;
+  justify-self: start;
+}
+
+.content {
+  overflow: hidden;
+}
+
+.contentInner {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  max-width: 70ch;
+  padding: 0 0 24px 150px;
+}
+
+.footnote {
+  margin-top: 18px;
+  max-width: 80ch;
+}
+
+@media (max-width: 767px) {
+  .trigger {
+    grid-template-columns: minmax(0, 1fr) 24px;
+    grid-template-areas:
+      "when chevron"
+      "title chevron"
+      "kind chevron";
+  }
+  .when {
+    grid-area: when;
+  }
+  .stepTitle {
+    grid-area: title;
+  }
+  .kind {
+    grid-area: kind;
+    justify-self: start;
+  }
+  .chevron {
+    grid-area: chevron;
+  }
+  .contentInner {
+    padding-left: 0;
+  }
+}

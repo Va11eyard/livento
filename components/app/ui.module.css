@@ -1,0 +1,290 @@
+/* Shared layout + state styles for app screens (tokens from app/globals.css). */
+
+.page {
+  padding-top: clamp(28px, 4.5vw, 56px);
+  padding-bottom: clamp(55px, 7vw, 102px);
+}
+
+.head {
+  display: grid;
+  gap: 16px;
+  margin-bottom: clamp(28px, 4vw, 48px);
+}
+.head :global(.kicker) {
+  margin-bottom: 0;
+}
+
+.headRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px 32px;
+}
+
+.block {
+  margin-top: clamp(40px, 5vw, 64px);
+}
+
+.blockRule {
+  margin-top: clamp(40px, 5vw, 64px);
+  padding-top: clamp(32px, 4vw, 48px);
+  border-top: 1px solid var(--line);
+}
+
+.sectionTitle {
+  font: 610 clamp(24px, 2.6vw, 34px) / 1.08 var(--font-ui);
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px 24px;
+  margin-bottom: 22px;
+}
+
+.smallTitle {
+  font: 650 18px / 1.2 var(--font-ui);
+  letter-spacing: -0.02em;
+}
+
+.panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: clamp(20px, 3vw, 32px);
+}
+
+.outline {
+  background: #fff;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  padding: clamp(20px, 3vw, 32px);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.meta {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(32px, 4vw, 54px) 24px;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px 24px;
+}
+
+/* Notices ---------------------------------------------------------------- */
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 15px;
+}
+.notice p {
+  flex: 1 1 260px;
+}
+
+.noticeSample {
+  border: 1px dashed var(--ink);
+  background: var(--surface);
+}
+
+.noticeError {
+  border-color: var(--danger);
+}
+.noticeError .noticeLabel {
+  color: var(--danger);
+}
+
+.noticeOk {
+  border-color: var(--ok);
+}
+.noticeOk .noticeLabel {
+  color: var(--ok);
+}
+
+.noticeLabel {
+  font: 650 13px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.textButton {
+  border: 0;
+  padding: 4px 0;
+  background: none;
+  font: 650 15px var(--font-ui);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.textButton:hover {
+  background: var(--yellow);
+}
+
+.inlineLink {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.inlineLink:hover {
+  background: var(--yellow);
+}
+
+/* Empty / no-profile state ------------------------------------------------ */
+
+.empty {
+  display: grid;
+  gap: 18px;
+  max-width: 720px;
+  padding-block: clamp(24px, 5vw, 64px);
+}
+.empty :global(.kicker) {
+  margin-bottom: 0;
+}
+
+/* Chips (toggle items) ------------------------------------------------------ */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  font: 650 14px/1.1 var(--font-ui);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.chip:hover {
+  background: var(--yellow);
+  color: var(--ink);
+}
+.chip[data-state="on"],
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: #fff;
+}
+.chip[data-state="on"]:hover,
+.chip[aria-pressed="true"]:hover {
+  background: var(--yellow);
+  color: var(--ink);
+}
+.chip[data-state="on"]::before,
+.chip[aria-pressed="true"]::before {
+  content: "✓";
+  font-size: 12px;
+}
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Skeleton (neutral, static: no shimmer) ------------------------------------ */
+
+.skeleton {
+  display: grid;
+  gap: 16px;
+}
+.skelBar {
+  height: 14px;
+  width: 140px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.skelTitle {
+  height: clamp(34px, 4vw, 50px);
+  width: min(560px, 80%);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.skelLine {
+  height: 16px;
+  width: min(420px, 70%);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.skelGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+.skelCard {
+  aspect-ratio: 1.5;
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+/* Small helpers ---------------------------------------------------------------- */
+
+.status {
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 6px;
+}
+
+.plainList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.figure {
+  font: 610 clamp(30px, 3.4vw, 44px) / 1 var(--font-ui);
+  letter-spacing: -0.04em;
+}
+
+@media (max-width: 991px) {
+  .grid3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .grid2,
+  .grid3,
+  .skelGrid {
+    grid-template-columns: 1fr;
+  }
+}

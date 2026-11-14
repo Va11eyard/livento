@@ -1,0 +1,55 @@
+.gate {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  padding: clamp(24px, 4vw, 44px);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.title {
+  font: 610 clamp(26px, 3vw, 40px) / 1.04 var(--font-ui);
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.description {
+  max-width: 56ch;
+}
+
+.features {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.features li {
+  display: flex;
+  gap: 10px;
+}
+.features li::before {
+  content: "●";
+  font-size: 8px;
+  line-height: 2.6;
+}
+
+.price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+}
+
+.fine {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
