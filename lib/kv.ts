@@ -1,6 +1,8 @@
 /**
  * Tiny key-value store over the Upstash Redis REST API, with an in-memory
- * fallback when UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are not set.
+ * fallback when no Redis REST credentials are set. Accepts the Upstash names
+ * (UPSTASH_REDIS_REST_URL / _TOKEN) and the names Vercel's Upstash integration
+ * injects (KV_REST_API_URL / KV_REST_API_TOKEN).
  *
  * Server-only. The in-memory fallback lives per server instance (on serverless
  * each instance has its own copy) — fine for a demo, not for real persistence.
@@ -35,16 +37,19 @@ const mem: MemStore = (globalStore.__liventoKv ??= {
   lists: new Map(),
 });
 
+const kvUrl = () => (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "").trim();
+const kvToken = () => (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "").trim();
+
 export function isKvConfigured(): boolean {
-  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  return Boolean(kvUrl() && kvToken());
 }
 
 async function upstash<T>(command: (string | number)[]): Promise<T> {
-  const base = (process.env.UPSTASH_REDIS_REST_URL ?? "").replace(/\/+$/, "");
+  const base = kvUrl().replace(/\/+$/, "");
   const res = await fetch(base, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`,
+      Authorization: `Bearer ${kvToken()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(command.map(String)),

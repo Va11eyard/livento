@@ -31,7 +31,8 @@ export function AlertsBox({ profile }: { profile: Profile }) {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState<null | "email" | "telegram">(null);
   const [result, setResult] = useState<Result | null>(null);
-  const [channels, setChannels] = useState<{ email: boolean; telegram: boolean } | null>(null);
+  // email needs storage; Telegram answers with picks right away and adds daily alerts when storage exists
+  const [channels, setChannels] = useState<{ email: boolean; telegram: boolean; daily: boolean } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -40,9 +41,9 @@ export function AlertsBox({ profile }: { profile: Profile }) {
         const live = (key: IntegrationStatus["key"]) =>
           health.integrations.some((i) => i.key === key && i.state === "live");
         const storage = live("storage");
-        setChannels({ email: storage && live("email"), telegram: storage && live("telegram") });
+        setChannels({ email: storage && live("email"), telegram: live("telegram"), daily: storage });
       })
-      .catch(() => setChannels({ email: false, telegram: false }));
+      .catch(() => setChannels({ email: false, telegram: false, daily: false }));
     return () => controller.abort();
   }, []);
 
@@ -92,10 +93,12 @@ export function AlertsBox({ profile }: { profile: Profile }) {
     <section className={`${ui.panel} ${styles.alerts}`} aria-labelledby={`${id}-title`}>
       <div className={styles.alertsIntro}>
         <h2 id={`${id}-title`} className={ui.sectionTitle}>
-          Get alerts for new matches
+          {channels.daily ? "Get alerts for new matches" : "Get your picks in Telegram"}
         </h2>
         <p className={ui.meta}>
-          Free. We check daily for new events that match your interests in {profile.city}.
+          {channels.daily
+            ? `Free. We check daily for new events that match your interests in ${profile.city}.`
+            : `Free. Tap Start in our bot and it sends your top picks for ${profile.city} right away.`}
           {channels.email ? " Your email is used only for these alerts." : ""}
         </p>
       </div>

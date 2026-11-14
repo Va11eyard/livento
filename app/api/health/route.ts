@@ -61,7 +61,9 @@ export async function GET(request: Request) {
           key: "telegram",
           name: "Telegram alerts",
           state: "live",
-          detail: "The bot confirms /start and sends new matches.",
+          detail: isKvConfigured()
+            ? "The bot sends your top picks on Start and new matches once a day."
+            : "The bot sends your top picks on Start. Daily alerts turn on once storage is connected.",
         }
       : {
           key: "telegram",

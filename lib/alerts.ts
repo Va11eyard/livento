@@ -3,10 +3,10 @@
  * through the Telegram Bot API and the Resend email API (plain fetch).
  */
 import { randomBytes } from "node:crypto";
-import { findCity } from "./cities";
+import { findCity, US_CITIES } from "./cities";
 import { kvDel, kvGet, kvSadd, kvSet, kvSmembers, kvSrem } from "./kv";
 import { formatDate } from "./roadmap";
-import { CATEGORY_LABELS, type Category, type LiventoEvent, type Profile } from "./types";
+import { CATEGORIES, CATEGORY_LABELS, type Category, type LiventoEvent, type Profile } from "./types";
 
 export interface AlertRecord {
   id: string;
@@ -148,14 +148,69 @@ function eventFacts(e: LiventoEvent): string {
   return parts.join(" · ");
 }
 
-export function digestTelegram(rec: AlertRecord, events: LiventoEvent[], site: string): string {
+/**
+ * A Telegram (HTML) message listing events: title, one entry per event with its
+ * Livento page and official ticket link, the data attribution and a footer line.
+ */
+export function picksTelegram(title: string, events: LiventoEvent[], site: string, footer: string): string {
   const lines = events.map((e) => {
     const tickets = ticketUrl(e);
     const ticketsLine = tickets ? `\n  <a href="${escapeHtml(tickets)}">${escapeHtml(ticketLabel(e))}</a>` : "";
     return `• <a href="${escapeHtml(eventUrl(e, site))}">${escapeHtml(e.name)}</a> — full cost on Livento\n  ${escapeHtml(eventFacts(e))}${ticketsLine}`;
   });
   const attribution = events.some((e) => e.source === "ticketmaster") ? "\n\nEvent data: Ticketmaster." : "";
-  return `<b>New for you in ${escapeHtml(rec.city)}</b>\n\n${lines.join("\n\n")}${attribution}\n\nPrices are estimates — check the event page. Send /stop to unsubscribe.`;
+  return `<b>${escapeHtml(title)}</b>\n\n${lines.join("\n\n")}${attribution}\n\n${footer}`;
+}
+
+export function digestTelegram(rec: AlertRecord, events: LiventoEvent[], site: string): string {
+  return picksTelegram(
+    `New for you in ${rec.city}`,
+    events,
+    site,
+    "Prices are estimates — check the event page. Send /stop to unsubscribe.",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Telegram start links that work without storage
+// ---------------------------------------------------------------------------
+
+const STATELESS_START = /^p([0-9a-z]{1,3})-([0-9a-z]{1,3})$/;
+
+/**
+ * A Telegram /start payload that carries the city and interests itself
+ * ("p<city index>-<interest bits>", base 36, well under Telegram's 64-char limit),
+ * so the bot can answer with picks even when no storage is configured.
+ * Null when the city is not in the US_CITIES list.
+ */
+export function statelessStartPayload(city: string, stateCode: string | undefined, interests: Category[]): string | null {
+  const name = city.trim().toLowerCase();
+  const state = stateCode?.trim().toUpperCase();
+  const index = US_CITIES.findIndex((c) => c.name.toLowerCase() === name && (!state || c.state === state));
+  if (index < 0) return null;
+  const mask = interests.reduce((bits, c) => {
+    const i = CATEGORIES.indexOf(c);
+    return i >= 0 ? bits | (1 << i) : bits;
+  }, 0);
+  return `p${index.toString(36)}-${mask.toString(36)}`;
+}
+
+/** Reads a payload made by statelessStartPayload; null for anything else. */
+export function parseStatelessStart(
+  payload: string,
+): Pick<AlertRecord, "city" | "stateCode" | "interests" | "favourites"> | null {
+  const match = STATELESS_START.exec(payload);
+  if (!match) return null;
+  const city = US_CITIES[parseInt(match[1], 36)];
+  if (!city) return null;
+  const mask = parseInt(match[2], 36);
+  const interests = CATEGORIES.filter((_, i) => (mask & (1 << i)) !== 0);
+  return {
+    city: city.name,
+    stateCode: city.state,
+    interests: interests.length ? interests : [...CATEGORIES],
+    favourites: [],
+  };
 }
 
 export function digestEmail(rec: AlertRecord, events: LiventoEvent[], site: string) {

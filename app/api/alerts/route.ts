@@ -6,6 +6,7 @@ import {
   newAlertId,
   saveAlert,
   sendEmail,
+  statelessStartPayload,
   telegramConfigured,
   telegramStartUrl,
   welcomeEmail,
@@ -28,6 +29,26 @@ export async function POST(request: Request) {
   const body = await parseBody(request, AlertSubscribeSchema, 16 * 1024);
   if (!body.ok) return body.response;
   const req = body.data;
+
+  // Telegram: a start link that carries the city + interests, so the bot can answer right away
+  // (no storage needed). With storage, the bot also subscribes the chat when the user taps Start.
+  if (req.channel === "telegram") {
+    if (!telegramConfigured()) {
+      return json<AlertSubscribeResponse>({
+        ok: false,
+        message: `Telegram alerts aren't set up on this deployment yet. ${NOT_SAVED}`,
+      });
+    }
+    const payload = statelessStartPayload(req.city, req.stateCode, req.interests);
+    if (payload) {
+      return json<AlertSubscribeResponse>({
+        ok: true,
+        telegramStartUrl: telegramStartUrl(payload),
+        message: "Open Telegram and tap Start — your top picks arrive right away.",
+      });
+    }
+    // City outside the built-in list: fall back to a stored subscription below (needs storage).
+  }
 
   if (!isKvConfigured()) {
     return json<AlertSubscribeResponse>({

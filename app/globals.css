@@ -134,11 +134,14 @@ textarea:focus-visible,
   top: 12px;
 }
 
-/* Wordmark */
+/* Wordmark: condensed Oswald, slanted (italic) the same way everywhere the logo appears */
 .brand {
+  display: inline-block;
   font: 650 34px/0.95 var(--font-display);
   letter-spacing: -2.7px;
   text-transform: uppercase;
+  transform: skewX(-12deg);
+  transform-origin: left bottom;
 }
 
 /* "01 / Kicker" label */
