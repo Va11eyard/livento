@@ -10,6 +10,7 @@ import {
 } from "@/lib/alerts";
 import { apiError, json, readJson } from "@/lib/http";
 import { isKvConfigured } from "@/lib/kv";
+import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ interface TelegramUpdate {
  * (except a bad secret) so updates aren't retried forever.
  */
 export async function POST(request: Request) {
+  const limited = await rateLimit(request, "telegram", RATE_LIMITS.webhook);
+  if (limited) return limited;
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
   if (secret && request.headers.get("x-telegram-bot-api-secret-token") !== secret) {
     return apiError("Unauthorized", 401);

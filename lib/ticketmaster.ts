@@ -4,7 +4,8 @@
  *
  * - Returns null when there is no key or every upstream call fails, so the
  *   caller can fall back to labeled sample events.
- * - Results are cached for 1 hour in lib/kv (key `events:<hash>`).
+ * - Results are cached for 1 hour in lib/kv (key `events:<hash>`), plus a
+ *   24-hour backup (`events:<hash>:stale`) used only when Ticketmaster fails.
  * - At most 4 parallel calls per query (Ticketmaster allows 5 requests/second).
  */
 import { createHash } from "node:crypto";
@@ -12,8 +13,11 @@ import { kvGet, kvSet } from "./kv";
 import type { Category, LiventoEvent, Presale } from "./types";
 
 const TM_EVENTS_URL = "https://app.ticketmaster.com/discovery/v2/events.json";
+const TM_EVENT_URL = "https://app.ticketmaster.com/discovery/v2/events";
 const TIMEOUT_MS = 6_000;
 const CACHE_TTL_SECONDS = 3_600;
+/** Backup copy used only when Ticketmaster is down. */
+const STALE_TTL_SECONDS = 24 * 3_600;
 const MAX_EVENTS = 120;
 
 export const TM_ATTRIBUTION = "Event data: Ticketmaster";
@@ -350,22 +354,31 @@ export function hasTicketmasterKey(): boolean {
   return Boolean(process.env.TICKETMASTER_API_KEY?.trim());
 }
 
+export interface TicketmasterResult {
+  events: LiventoEvent[];
+  /** true when Ticketmaster failed and these come from the last good answer (≤ 24 h old). */
+  stale: boolean;
+}
+
 /**
- * Live events for a query, or null when there is no key / every call failed.
- * An empty array means Ticketmaster answered but found nothing.
+ * Live events for a query, or null when there is no key / every call failed
+ * and there is no recent copy. An empty list means Ticketmaster answered but
+ * found nothing. Fresh answers are cached 1 hour; a backup copy is kept for
+ * 24 hours so an outage falls back to cached events before sample events.
  */
-export async function getTicketmasterEvents(q: TicketmasterQuery): Promise<LiventoEvent[] | null> {
+export async function getTicketmasterEvents(q: TicketmasterQuery): Promise<TicketmasterResult | null> {
   const apiKey = process.env.TICKETMASTER_API_KEY?.trim();
   if (!apiKey) return null;
 
   const tmCategories = q.categories.filter((c) => c !== "cinema" && c !== "experiences");
-  if (q.categories.length > 0 && tmCategories.length === 0) return [];
+  if (q.categories.length > 0 && tmCategories.length === 0) return { events: [], stale: false };
   const query: TicketmasterQuery = { ...q, categories: tmCategories };
 
   const key = cacheKey(query);
+  const staleKey = `${key}:stale`;
   try {
     const cached = await kvGet<LiventoEvent[]>(key);
-    if (Array.isArray(cached)) return cached;
+    if (Array.isArray(cached)) return { events: cached, stale: false };
   } catch {
     // cache unavailable — continue live
   }
@@ -375,6 +388,12 @@ export async function getTicketmasterEvents(q: TicketmasterQuery): Promise<Liven
   const ok = settled.filter((s): s is PromiseFulfilledResult<LiventoEvent[]> => s.status === "fulfilled");
   if (ok.length === 0) {
     console.warn("[ticketmaster] all requests failed");
+    try {
+      const backup = await kvGet<LiventoEvent[]>(staleKey);
+      if (Array.isArray(backup) && backup.length) return { events: backup, stale: true };
+    } catch {
+      // no backup either
+    }
     return null;
   }
 
@@ -393,8 +412,55 @@ export async function getTicketmasterEvents(q: TicketmasterQuery): Promise<Liven
 
   try {
     await kvSet(key, result, CACHE_TTL_SECONDS);
+    await kvSet(staleKey, result, STALE_TTL_SECONDS);
   } catch {
     // ignore cache write failures
   }
-  return result;
+  return { events: result, stale: false };
+}
+
+/** Ticketmaster's own event id from a Livento id ("tm_<id>"), or null. */
+export function ticketmasterIdOf(liventoId: string): string | null {
+  const m = /^tm_([A-Za-z0-9_-]{1,64})$/.exec(liventoId);
+  return m ? m[1] : null;
+}
+
+/**
+ * One event by Ticketmaster id (GET /discovery/v2/events/{id}), cached 1 hour.
+ * Null when there is no key, the event is gone/cancelled, or the call fails.
+ */
+export async function getTicketmasterEventById(tmId: string): Promise<LiventoEvent | null> {
+  const apiKey = process.env.TICKETMASTER_API_KEY?.trim();
+  if (!apiKey || !/^[A-Za-z0-9_-]{1,64}$/.test(tmId)) return null;
+  const key = `event:tm:${tmId}`;
+  try {
+    const cached = await kvGet<LiventoEvent>(key);
+    if (cached && typeof cached === "object" && cached.id) return cached;
+  } catch {
+    // cache unavailable — continue live
+  }
+  try {
+    const params = new URLSearchParams({ apikey: apiKey });
+    const res = await fetch(`${TM_EVENT_URL}/${encodeURIComponent(tmId)}.json?${params.toString()}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      if (res.status !== 404) console.warn(`[ticketmaster] event lookup HTTP ${res.status}`);
+      return null;
+    }
+    const event = mapEvent((await res.json()) as TmEvent);
+    if (event) {
+      try {
+        await kvSet(key, event, CACHE_TTL_SECONDS);
+      } catch {
+        // ignore cache write failures
+      }
+    }
+    return event;
+  } catch {
+    console.warn("[ticketmaster] event lookup failed");
+    return null;
+  }
 }

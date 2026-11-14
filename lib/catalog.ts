@@ -9,11 +9,18 @@ import { findCity } from "./cities";
 import { addDays, isoDatePart, todayISO } from "./dates";
 import { distanceMiles, isLatLng, type LatLng } from "./geo";
 import { EventSchema } from "./schemas";
-import { getTicketmasterEvents, hasTicketmasterKey } from "./ticketmaster";
+import {
+  getTicketmasterEventById,
+  getTicketmasterEvents,
+  hasTicketmasterKey,
+  ticketmasterIdOf,
+} from "./ticketmaster";
 import type { Category, EventsResponse, LiventoEvent } from "./types";
 
 export const SAMPLE_NOTICE = "Showing sample events — live data needs a Ticketmaster API key";
 const TM_DOWN_NOTICE = "Live events are unavailable right now — showing sample events";
+const TM_STALE_NOTICE =
+  "Live events are unavailable right now — showing Ticketmaster results saved in the last 24 hours";
 
 function loadEvents(raw: unknown, label: string, extra?: (item: Record<string, unknown>) => Partial<LiventoEvent>) {
   const out: LiventoEvent[] = [];
@@ -53,6 +60,18 @@ export function sampleEvents(): LiventoEvent[] {
 /** Every event we can look up by id without a network call. */
 export function localEventById(id: string): LiventoEvent | undefined {
   return curatedEvents().find((e) => e.id === id) ?? sampleEvents().find((e) => e.id === id);
+}
+
+/**
+ * One event by Livento id: curated and sample events locally, `tm_<id>` from
+ * Ticketmaster. Lets /event/[id] and /roadmap/[id] links work in a browser
+ * that never opened the event (shared links, alert emails).
+ */
+export async function findEventById(id: string): Promise<LiventoEvent | null> {
+  const local = localEventById(id);
+  if (local) return local;
+  const tmId = ticketmasterIdOf(id);
+  return tmId ? getTicketmasterEventById(tmId) : null;
 }
 
 export interface CatalogQuery {
@@ -147,9 +166,11 @@ export async function findEvents(q: CatalogQuery, today: string = todayISO()): P
   });
 
   if (live !== null) {
-    const events = live.map((e) => (e.distanceMiles === undefined ? withDistance(e, origin) : e));
+    const events = live.events.map((e) => (e.distanceMiles === undefined ? withDistance(e, origin) : e));
     let notice: string | undefined;
-    if (events.length === 0) {
+    if (live.stale) {
+      notice = TM_STALE_NOTICE;
+    } else if (events.length === 0) {
       notice = curated.length
         ? "No live events matched these filters — showing big experiences"
         : "No live events matched these filters";

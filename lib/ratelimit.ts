@@ -9,6 +9,8 @@ export const RATE_LIMITS = {
   general: 60, // per minute
   llm: 20, // routes that may call the LLM
   heavy: 10, // insights, alerts
+  webhook: 300, // Telegram webhook: every update comes from Telegram's own servers
+  cron: 10, // daily job; a few manual runs are fine
 } as const;
 
 const WINDOW_SECONDS = 60;

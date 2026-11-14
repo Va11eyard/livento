@@ -96,6 +96,7 @@ export const PlanResultSchema = z.object({
 export const RecommendRequestSchema = z.object({
   profile: ProfileSchema,
   events: z.array(EventSchema).max(300),
+  recentGoalCategories: z.array(CategorySchema).max(3).optional(),
 });
 
 export const PlanRequestSchema = z.object({

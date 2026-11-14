@@ -124,8 +124,18 @@ export function interestsLabel(interests: Category[]): string {
   return interests.length ? interests.map((c) => CATEGORY_LABELS[c]).join(", ") : "all events";
 }
 
+/** The Livento event page (full cost + plan); works in any browser via GET /api/events?id=. */
 function eventUrl(e: LiventoEvent, site: string): string {
-  return /^https?:\/\//.test(e.url) ? e.url : `${site}/discover`;
+  return `${site}/event/${encodeURIComponent(e.id)}`;
+}
+
+/** The official ticket page, when there is a real one. */
+function ticketUrl(e: LiventoEvent): string | undefined {
+  return e.source !== "sample" && /^https:\/\//.test(e.url) ? e.url : undefined;
+}
+
+function ticketLabel(e: LiventoEvent): string {
+  return e.source === "ticketmaster" ? "Tickets on Ticketmaster" : "Official site";
 }
 
 function eventFacts(e: LiventoEvent): string {
@@ -139,9 +149,11 @@ function eventFacts(e: LiventoEvent): string {
 }
 
 export function digestTelegram(rec: AlertRecord, events: LiventoEvent[], site: string): string {
-  const lines = events.map(
-    (e) => `• <a href="${escapeHtml(eventUrl(e, site))}">${escapeHtml(e.name)}</a>\n  ${escapeHtml(eventFacts(e))}`,
-  );
+  const lines = events.map((e) => {
+    const tickets = ticketUrl(e);
+    const ticketsLine = tickets ? `\n  <a href="${escapeHtml(tickets)}">${escapeHtml(ticketLabel(e))}</a>` : "";
+    return `• <a href="${escapeHtml(eventUrl(e, site))}">${escapeHtml(e.name)}</a> — full cost on Livento\n  ${escapeHtml(eventFacts(e))}${ticketsLine}`;
+  });
   const attribution = events.some((e) => e.source === "ticketmaster") ? "\n\nEvent data: Ticketmaster." : "";
   return `<b>New for you in ${escapeHtml(rec.city)}</b>\n\n${lines.join("\n\n")}${attribution}\n\nPrices are estimates — check the event page. Send /stop to unsubscribe.`;
 }
@@ -150,10 +162,13 @@ export function digestEmail(rec: AlertRecord, events: LiventoEvent[], site: stri
   const unsubscribe = `${site}/api/alerts?unsubscribe=${encodeURIComponent(rec.id)}`;
   const subject = `Livento: ${events.length} new event${events.length === 1 ? "" : "s"} in ${rec.city}`;
   const items = events
-    .map(
-      (e) =>
-        `<li style="margin:0 0 14px"><a href="${escapeHtml(eventUrl(e, site))}" style="color:#141414;font-weight:600">${escapeHtml(e.name)}</a><br><span style="color:#616161">${escapeHtml(eventFacts(e))}</span></li>`,
-    )
+    .map((e) => {
+      const tickets = ticketUrl(e);
+      const ticketsLink = tickets
+        ? ` · <a href="${escapeHtml(tickets)}" style="color:#141414">${escapeHtml(ticketLabel(e))}</a>`
+        : "";
+      return `<li style="margin:0 0 14px"><a href="${escapeHtml(eventUrl(e, site))}" style="color:#141414;font-weight:600">${escapeHtml(e.name)}</a><br><span style="color:#616161">${escapeHtml(eventFacts(e))}</span><br><a href="${escapeHtml(eventUrl(e, site))}" style="color:#141414">See the full cost on Livento</a>${ticketsLink}</li>`;
+    })
     .join("");
   const attribution = events.some((e) => e.source === "ticketmaster") ? "<p>Event data: Ticketmaster.</p>" : "";
   const html = `<div style="font-family:Inter,Arial,sans-serif;color:#141414;max-width:560px">
@@ -164,7 +179,10 @@ export function digestEmail(rec: AlertRecord, events: LiventoEvent[], site: stri
 <p style="color:#616161;font-size:13px">You subscribed to Livento alerts. <a href="${escapeHtml(unsubscribe)}">Unsubscribe</a>.</p>
 </div>`;
   const text = `New for you in ${rec.city}\n\n${events
-    .map((e) => `- ${e.name}\n  ${eventFacts(e)}\n  ${eventUrl(e, site)}`)
+    .map((e) => {
+      const tickets = ticketUrl(e);
+      return `- ${e.name}\n  ${eventFacts(e)}\n  Full cost: ${eventUrl(e, site)}${tickets ? `\n  ${ticketLabel(e)}: ${tickets}` : ""}`;
+    })
     .join("\n\n")}\n\nPrices are estimates — check the event page before you buy.\nUnsubscribe: ${unsubscribe}`;
   return { subject, html, text };
 }

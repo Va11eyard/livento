@@ -220,6 +220,12 @@ export function getEvents(query: EventsQuery, signal?: AbortSignal): Promise<Eve
   return call(`/api/events${qs ? `?${qs}` : ""}`, { timeoutMs: TIMEOUTS.events, signal }, isEventsResponse);
 }
 
+/** GET /api/events?id= — one event by id, for links opened in a browser that never saw it. */
+export function getEventById(id: string, signal?: AbortSignal): Promise<EventsResponse> {
+  const qs = new URLSearchParams({ id }).toString();
+  return call(`/api/events?${qs}`, { timeoutMs: TIMEOUTS.events, signal }, isEventsResponse);
+}
+
 /** POST /api/recommend — top 8 with a "why this" line. */
 export function recommend(req: RecommendRequest, signal?: AbortSignal): Promise<RecommendResponse> {
   return call("/api/recommend", { method: "POST", body: req, timeoutMs: TIMEOUTS.llm, signal }, isRecommendResponse);

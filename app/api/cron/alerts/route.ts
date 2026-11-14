@@ -16,6 +16,7 @@ import { findEvents } from "@/lib/catalog";
 import { addDays, todayISO } from "@/lib/dates";
 import { apiError, json, siteOrigin } from "@/lib/http";
 import { isKvConfigured, kvSrem } from "@/lib/kv";
+import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
 import { scoreEvents } from "@/lib/score";
 import type { EventsResponse } from "@/lib/types";
 
@@ -28,6 +29,8 @@ const PER_ALERT = 3;
 
 /** GET /api/cron/alerts — daily job (Vercel Cron). Requires `Authorization: Bearer CRON_SECRET`. */
 export async function GET(request: NextRequest) {
+  const limited = await rateLimit(request, "cron-alerts", RATE_LIMITS.cron);
+  if (limited) return limited;
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return apiError("Unauthorized", 401);

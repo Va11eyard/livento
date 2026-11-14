@@ -137,7 +137,7 @@ All JSON; exact TypeScript shapes in `lib/types.ts`.
 
 | Route | Method | Input | Output | Fallback |
 | --- | --- | --- | --- | --- |
-| `/api/events` | GET | `city, state, lat, lng, radius, categories, from, to, keyword` | `EventsResponse` | sample events, `source: "sample"` + notice |
+| `/api/events` | GET | `city, state, lat, lng, radius, categories, from, to, keyword`, or `id=<event id>` for one event (shared links, alerts) | `EventsResponse` | sample events, `source: "sample"` + notice |
 | `/api/recommend` | POST | `RecommendRequest` | `RecommendResponse` | rule order + template "why" |
 | `/api/plan` | POST | `PlanRequest` | `PlanResponse` | pure rules |
 | `/api/roadmap` | POST | `RoadmapRequest` | `RoadmapResponse` | template steps |
@@ -147,6 +147,7 @@ All JSON; exact TypeScript shapes in `lib/types.ts`.
 | `/api/checkout` | POST | `CheckoutRequest` | `CheckoutResponse` | `{ demo: true }` → demo unlock |
 | `/api/cron/alerts` | GET | `Authorization: Bearer CRON_SECRET` | `{ sent }` | — |
 | `/api/log` | POST | `{ anonId, eventId, action }` | `{ ok }` | in-memory |
+| `/api/health` | GET | — | `HealthResponse` (configuration only, no key values) | — |
 
 ## 8. Data models
 

@@ -195,6 +195,7 @@ export interface ComparatorResult {
 // ---------------------------------------------------------------------------
 
 // GET /api/events?city=&state=&lat=&lng=&radius=&categories=music,theatre&from=YYYY-MM-DD&to=YYYY-MM-DD&keyword=
+// GET /api/events?id=<event id>  → the same shape with one event (404 when unknown)
 export interface EventsResponse {
   events: LiventoEvent[];
   source: "ticketmaster" | "sample" | "mixed"; // "sample" when no key / upstream failure
@@ -205,6 +206,12 @@ export interface EventsResponse {
 export interface RecommendRequest {
   profile: Profile;
   events: LiventoEvent[];
+  /**
+   * Categories of the user's last 3 saved goals (envelopes), oldest first.
+   * Drives the novelty factor (spec §6). When omitted, the last 3 liked
+   * events stand in for saved goals.
+   */
+  recentGoalCategories?: Category[];
 }
 export interface RecommendItem {
   eventId: string;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { deadlineText } from "@/components/app/CostTable";
 import { eventHref } from "@/components/app/EventCard";
+import { EventLookup } from "@/components/app/EventLookup";
 import { eventPlace, eventWhen, formatDate, safeDecode, safeExternalUrl, usd0 } from "@/components/app/format";
 import { buildIcs, downloadFile, slugify } from "@/components/app/ics";
 import { PremiumGate } from "@/components/app/PremiumGate";
@@ -216,24 +217,10 @@ export function RoadmapView({ id }: { id: string }) {
   if (!state.profile) {
     return <NoProfile text="Set up a quick profile (or use the sample) so the roadmap can use your city, budget and vacation days." />;
   }
-  const event = state.savedEvents[safeDecode(id)];
+  const eventId = safeDecode(id);
+  const event = state.savedEvents[eventId];
   if (!event) {
-    return (
-      <div className="wrap">
-        <section className={ui.empty} aria-labelledby="missing-roadmap">
-          <p className="kicker">Roadmap</p>
-          <h1 id="missing-roadmap" className="title">
-            We can&rsquo;t find this event on this device
-          </h1>
-          <p className="lead muted">Open the event from Discover first, then choose &ldquo;Open roadmap&rdquo;.</p>
-          <div className={ui.actions}>
-            <Link href="/discover" className="pill">
-              Go to Discover <span aria-hidden="true">↗</span>
-            </Link>
-          </div>
-        </section>
-      </div>
-    );
+    return <EventLookup id={eventId} kicker="Roadmap" hint="Pick an event in Discover, then choose “Open roadmap”." />;
   }
   return <Roadmap key={event.id} event={event} profile={state.profile} state={state} />;
 }

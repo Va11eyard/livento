@@ -8,7 +8,7 @@
  */
 import { buildPlan, eventDistanceMiles, isSameCity, needsTrip } from "./cost";
 import { monthOf, resolveToday } from "./dates";
-import { CATEGORY_LABELS, type LiventoEvent, type Profile } from "./types";
+import { CATEGORY_LABELS, type Category, type LiventoEvent, type Profile } from "./types";
 
 export const SCORE_WEIGHTS = { match: 0.35, distance: 0.2, price: 0.2, date: 0.15, novelty: 0.1 } as const;
 
@@ -46,7 +46,17 @@ function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
-export function scoreEvents(profile: Profile, events: LiventoEvent[], today?: string): ScoredEvent[] {
+export interface ScoreOptions {
+  /** Categories of the last 3 saved goals (envelopes). Omitted → last 3 liked events are the proxy. */
+  recentGoalCategories?: Category[];
+}
+
+export function scoreEvents(
+  profile: Profile,
+  events: LiventoEvent[],
+  today?: string,
+  options: ScoreOptions = {},
+): ScoredEvent[] {
   const t = resolveToday(today);
   const skipped = new Set(profile.skipped ?? []);
   const interests = new Set<string>(profile.interests ?? []);
@@ -56,13 +66,16 @@ export function scoreEvents(profile: Profile, events: LiventoEvent[], today?: st
   const preferred = new Set(profile.preferredMonths ?? []);
   const radius = Number.isFinite(profile.radiusMiles) ? profile.radiusMiles : 0;
 
-  // Novelty proxy: categories of the last 3 liked events we can see.
+  // Novelty: categories of the last 3 saved goals (envelopes). Without that
+  // list (e.g. the alerts job), the last 3 liked events we can see stand in.
   const byId = new Map(events.map((e) => [e.id, e]));
-  const recentCategories = new Set(
-    (profile.liked ?? [])
-      .slice(-3)
-      .map((id) => byId.get(id)?.category)
-      .filter(Boolean),
+  const recentCategories = new Set<Category>(
+    options.recentGoalCategories
+      ? options.recentGoalCategories.slice(-3)
+      : (profile.liked ?? [])
+          .slice(-3)
+          .map((id) => byId.get(id)?.category)
+          .filter((c): c is Category => Boolean(c)),
   );
 
   const seenIds = new Set<string>();

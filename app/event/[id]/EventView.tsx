@@ -7,6 +7,7 @@ import { CostTable, deadlineText } from "@/components/app/CostTable";
 import { EnvelopeBar } from "@/components/app/EnvelopeBar";
 import { distanceText } from "@/components/app/EventCard";
 import { EventImage } from "@/components/app/EventImage";
+import { EventLookup } from "@/components/app/EventLookup";
 import {
   categoryLabel,
   eventPlace,
@@ -407,28 +408,6 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
   );
 }
 
-function MissingEvent() {
-  return (
-    <div className="wrap">
-      <section className={ui.empty} aria-labelledby="missing-title">
-        <p className="kicker">Event</p>
-        <h1 id="missing-title" className="title">
-          We can&rsquo;t find this event on this device
-        </h1>
-        <p className="lead muted">
-          Events are saved in your browser when you open them from Discover. Open it from there and it&rsquo;ll show up
-          here.
-        </p>
-        <div className={ui.actions}>
-          <Link href="/discover" className="pill">
-            Go to Discover <span aria-hidden="true">↗</span>
-          </Link>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 /** /event/[id] — details, dates, editable cost (free) and the Premium plan. */
 export function EventView({ id }: { id: string }) {
   const state = useAppState();
@@ -437,7 +416,10 @@ export function EventView({ id }: { id: string }) {
   if (!state.profile) {
     return <NoProfile text="Set up a quick profile (or use the sample) so we can estimate travel, hotel and the full cost of this event." />;
   }
-  const event = state.savedEvents[safeDecode(id)];
-  if (!event) return <MissingEvent />;
+  const eventId = safeDecode(id);
+  const event = state.savedEvents[eventId];
+  if (!event) {
+    return <EventLookup id={eventId} kicker="Event" hint="Find something similar in Discover." />;
+  }
   return <EventDetail key={event.id} event={event} profile={state.profile} state={state} />;
 }

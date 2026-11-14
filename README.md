@@ -72,7 +72,7 @@ Not used by design: Amadeus Self-Service (shut down), Eventbrite public search (
 
 Every route has a fallback, so the judge path never breaks:
 
-- `/api/events`: sample events, nearest first, plus curated experiences, with `source: "sample"` and a notice.
+- `/api/events`: when Ticketmaster fails, the last good answer for the same search (kept 24 hours) with a notice; otherwise sample events, nearest first, plus curated experiences, with `source: "sample"` and a notice.
 - `/api/recommend`: rule score (`0.35 match + 0.20 distance + 0.20 price + 0.15 date + 0.10 novelty`) + template "why".
 - `/api/plan`, `/api/roadmap`: pure rules and a deterministic template.
 - `/api/insights`: merchant rules only.
@@ -83,7 +83,7 @@ Every route has a fallback, so the judge path never breaks:
 
 | Route | Method | Notes |
 | --- | --- | --- |
-| `/api/events` | GET | `city, state, lat, lng, radius, categories, from, to, keyword` |
+| `/api/events` | GET | `city, state, lat, lng, radius, categories, from, to, keyword`; or `?id=<event id>` for one event (shared links, alert emails) |
 | `/api/recommend` | POST | Top 8 with "why"; `ranker: "llm" \| "rules"` |
 | `/api/plan` | POST | Cost lines, total, deadline, weekly amount |
 | `/api/roadmap` | POST | Dated steps; `writer: "llm" \| "template"` |

@@ -22,8 +22,8 @@ export async function POST(request: Request) {
   if (!body.ok) return body.response;
 
   try {
-    const { profile, events } = body.data;
-    const pool = scoreEvents(profile, events).slice(0, POOL);
+    const { profile, events, recentGoalCategories } = body.data;
+    const pool = scoreEvents(profile, events, undefined, { recentGoalCategories }).slice(0, POOL);
     if (pool.length === 0) return json<RecommendResponse>({ items: [], ranker: "rules" });
 
     const picks = await rerankWithLLM(profile, pool);

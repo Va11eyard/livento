@@ -21,7 +21,16 @@ import {
   useAppState,
   useHydrated,
 } from "@/lib/storage";
-import { CATEGORIES, CATEGORY_LABELS, type InteractionAction, type LiventoEvent, type Profile, type RecommendItem } from "@/lib/types";
+import {
+  CATEGORIES,
+  CATEGORY_LABELS,
+  type AppState,
+  type Category,
+  type InteractionAction,
+  type LiventoEvent,
+  type Profile,
+  type RecommendItem,
+} from "@/lib/types";
 import { AlertsBox } from "./AlertsBox";
 import styles from "./discover.module.css";
 
@@ -37,6 +46,15 @@ function byDate(a: LiventoEvent, b: LiventoEvent): number {
 
 function log(eventId: string, action: InteractionAction) {
   logInteraction({ anonId: getAppState().anonId, eventId, action });
+}
+
+/** Categories of the last 3 envelopes (saved goals), oldest first — the novelty factor in spec §6. */
+function recentGoalCategories(state: AppState): Category[] {
+  return [...state.envelopes]
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .slice(-3)
+    .map((env) => state.savedEvents[env.eventId]?.category)
+    .filter((c): c is Category => Boolean(c));
 }
 
 function interestsText(profile: Profile): string {
@@ -74,10 +92,11 @@ function Discover({ profile }: { profile: Profile }) {
   const list = events.data?.events;
 
   const recs = useAsync(list ? `${eventsKey}|rec` : null, (signal) => {
-    const latest = getAppState().profile ?? profile;
+    const state = getAppState();
+    const latest = state.profile ?? profile;
     const skipped = new Set(latest.skipped);
     const candidates = (list ?? []).filter((e) => !skipped.has(e.id)).slice(0, MAX_RANKED);
-    return recommend({ profile: latest, events: candidates }, signal);
+    return recommend({ profile: latest, events: candidates, recentGoalCategories: recentGoalCategories(state) }, signal);
   });
 
   const likedSet = new Set(profile.liked);
