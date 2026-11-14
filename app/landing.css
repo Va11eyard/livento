@@ -140,6 +140,13 @@
 
 .lv-landing .trail {
   z-index: 3;
+  transition: opacity 0.18s ease;
+}
+
+/* Quiet zone: while the pointer is near a link or button in the hero, existing
+   stamps fade out so they never cover what the user is about to click. */
+.lv-landing .trail-quiet .trail {
+  opacity: 0;
 }
 
 .lv-landing .intro-card {
@@ -181,6 +188,10 @@
 
 .lv-landing .active-trail .intro-card {
   opacity: 0;
+}
+
+.lv-landing .active-trail.trail-quiet .intro-card {
+  opacity: 1;
 }
 
 /* Stamps are created by components/landing/Trail.tsx. */

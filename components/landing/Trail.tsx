@@ -31,6 +31,8 @@ const PATH: readonly Pose[] = [
   [0.42, 0.49],
 ];
 const STILL_PATH: readonly Pose[] = [[0.53, 0.49]];
+/** No stamps within this many px of a link or button, so the trail never covers a click target. */
+const QUIET_PAD = 44;
 
 type TrailProps = {
   /** Wordmark + rails, rendered above the stage. */
@@ -58,6 +60,28 @@ export default function Trail({ top, foot }: TrailProps) {
     let auto: number[] = [];
     let rest = 0;
     let preloaded: HTMLImageElement[] = [];
+    let quiet = false;
+    let playingUntil = 0;
+
+    // True when the pointer is on, or within QUIET_PAD of, any link or button in the hero.
+    const nearInteractive = (clientX: number, clientY: number) =>
+      Array.from(hero.querySelectorAll<HTMLElement>("a, button")).some((el) => {
+        const b = el.getBoundingClientRect();
+        if (!b.width && !b.height) return false;
+        return (
+          clientX >= b.left - QUIET_PAD &&
+          clientX <= b.right + QUIET_PAD &&
+          clientY >= b.top - QUIET_PAD &&
+          clientY <= b.bottom + QUIET_PAD
+        );
+      });
+
+    // Fade existing stamps out (CSS .trail-quiet) while the pointer is aiming at a control.
+    const setQuiet = (next: boolean) => {
+      if (next === quiet) return;
+      quiet = next;
+      hero.classList.toggle("trail-quiet", next);
+    };
 
     const later = (fn: () => void, ms: number) => {
       const id = window.setTimeout(() => {
@@ -128,7 +152,11 @@ export default function Trail({ top, foot }: TrailProps) {
 
     const point = (event: PointerEvent, force = false) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest("a, button, nav") || (!force && reduced.matches)) return;
+      const nearUi =
+        Boolean(target?.closest("a, button, nav")) || nearInteractive(event.clientX, event.clientY);
+      // While "Play the trail" runs, keep its stamps visible even though the pointer sits on the button.
+      if (performance.now() > playingUntil) setQuiet(nearUi);
+      if (nearUi || (!force && reduced.matches)) return;
       const r = hero.getBoundingClientRect();
       const x = event.clientX - r.left;
       const y = event.clientY - r.top;
@@ -147,6 +175,8 @@ export default function Trail({ top, foot }: TrailProps) {
       warm();
       const r = hero.getBoundingClientRect();
       const poses = reduced.matches ? STILL_PATH : PATH;
+      setQuiet(false);
+      playingUntil = performance.now() + poses.length * 165 + LIFE_MS;
       poses.forEach(([px, py], i) => {
         auto.push(later(() => stamp(px * r.width, py * r.height), i * 165));
       });
@@ -160,6 +190,7 @@ export default function Trail({ top, foot }: TrailProps) {
     };
     const onLeave = () => {
       last = null;
+      setQuiet(false);
     };
     // Clear the trail when the tab is hidden so nothing piles up in the background.
     const onVisibility = () => {
@@ -186,7 +217,7 @@ export default function Trail({ top, foot }: TrailProps) {
       for (const id of timers) window.clearTimeout(id);
       timers.clear();
       layer.replaceChildren();
-      hero.classList.remove("active-trail");
+      hero.classList.remove("active-trail", "trail-quiet");
     };
   }, []);
 
