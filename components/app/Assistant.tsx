@@ -15,7 +15,7 @@ import {
 import { categoryTotals, coveredDays, monthlyAverage } from "@/app/insights/plan";
 import { askAssistant, assistantStatus, errorMessage } from "@/lib/client-api";
 import { todayISO } from "@/lib/dates";
-import { envelopeBalance, getAppState, newId, walletTotal } from "@/lib/storage";
+import { getAppState, goalBalance, newId, walletTotal } from "@/lib/storage";
 import type { AppState, AssistantAction, AssistantChatMessage, AssistantContext } from "@/lib/types";
 import styles from "./Assistant.module.css";
 import ui from "./ui.module.css";
@@ -157,7 +157,7 @@ function buildContext(state: AppState, pathname: string): AssistantContext {
       eventName: e.eventName.slice(0, 300),
       eventDate: e.eventDate,
       target: cap(e.target, 1_000_000) ?? 0,
-      balance: cap(envelopeBalance(e), 1_000_000) ?? 0,
+      balance: cap(goalBalance(state, e), 1_000_000) ?? 0,
       deadline: e.deadline,
     })),
     walletTotal: cap(walletTotal(state), 10_000_000),

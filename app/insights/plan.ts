@@ -112,8 +112,12 @@ export type GoalImpact =
  * its planned weekly amount: the amount auto-save withdraws, same rule as the
  * savings plan (weekly = ceil(remaining ÷ weeks to the deadline), one amount per week from today).
  */
-export function goalImpact(envelope: Envelope, extraWeekly: number, today: string = todayISO()): GoalImpact {
-  const balance = envelopeBalance(envelope);
+export function goalImpact(
+  envelope: Envelope,
+  extraWeekly: number,
+  today: string = todayISO(),
+  balance: number = envelopeBalance(envelope),
+): GoalImpact {
   const schedule = weeklySavings(envelope.target, balance, envelope.deadline, today);
   const { remaining } = schedule;
   if (remaining <= 0) return { kind: "funded", balance };

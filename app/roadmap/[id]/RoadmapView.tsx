@@ -15,7 +15,7 @@ import { useAsync } from "@/components/app/useAsync";
 import ui from "@/components/app/ui.module.css";
 import { roadmap } from "@/lib/client-api";
 import { buildPlan } from "@/lib/cost";
-import { envelopeBalance, envelopeForEvent, hasPremium, useAppState, useHydrated } from "@/lib/storage";
+import { envelopeForEvent, goalBalance, hasPremium, useAppState, useHydrated } from "@/lib/storage";
 import type { AppState, LiventoEvent, Profile, RoadmapStep, RoadmapStepKind } from "@/lib/types";
 import styles from "./roadmap.module.css";
 
@@ -46,7 +46,7 @@ function Roadmap({ event, profile, state }: { event: LiventoEvent; profile: Prof
   const premium = hasPremium(state);
   const [attempt, setAttempt] = useState(0);
   const envelope = envelopeForEvent(state, event.id);
-  const balance = envelope ? envelopeBalance(envelope) : 0;
+  const balance = envelope ? goalBalance(state, envelope) : 0;
   const plan = buildPlan(event, profile, balance);
   const result = useAsync(premium ? `${event.id}#${attempt}` : null, (signal) =>
     // The roadmap doesn't use like/skip history; leaving it out keeps the request small (64 KB limit).

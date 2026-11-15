@@ -31,8 +31,8 @@ import { buildPlan, eventDistanceMiles } from "@/lib/cost";
 import { isLatLng } from "@/lib/geo";
 import {
   addEnvelope,
-  envelopeBalance,
   envelopeForEvent,
+  goalBalance,
   getAppState,
   hasPremium,
   likeEvent,
@@ -199,7 +199,7 @@ function CompareSection({
   }
 
   const otherEnvelope = envelopeForEvent(state, other.id);
-  const otherPlan = buildPlan(other, profile, otherEnvelope ? envelopeBalance(otherEnvelope) : 0);
+  const otherPlan = buildPlan(other, profile, otherEnvelope ? goalBalance(state, otherEnvelope) : 0);
   const mine = comparatorSide(event.name, plan);
   const theirs = comparatorSide(other.name, otherPlan);
   // A = the cheaper (or, on a tie, sooner) one you could go to now; B = the bigger one.
@@ -241,7 +241,7 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
   const notify = useToast();
   const [overrides, setOverrides] = useState<CostOverrides>({});
   const envelope = envelopeForEvent(state, event.id);
-  const balance = envelope ? envelopeBalance(envelope) : 0;
+  const balance = envelope ? goalBalance(state, envelope) : 0;
   const plan = buildPlan(event, profile, balance, overrides);
   const premium = hasPremium(state);
   const liked = profile.liked.includes(event.id);

@@ -27,12 +27,14 @@ import {
 import {
   clearWallet,
   envelopeBalance,
+  goalCoverage,
   getAppState,
   hasPremium,
   removeEnvelope,
   setWallet,
   syncEnvelopeLedger,
   useAppState,
+  walletUnassigned,
   useHydrated,
   walletTotal,
 } from "@/lib/storage";
@@ -65,6 +67,8 @@ const KIND_LABEL: Record<WalletEntryKind, string> = {
 const SESSION_ID = /^cs_[A-Za-z0-9_]{6,250}$/;
 const EMPTY_SUMMARY: WalletSummary = { testMode: true, total: 0, envelopes: {} };
 const HISTORY_LIMIT = 12;
+
+const round = (n: number) => Math.round(n * 100) / 100;
 
 function parseAmount(text: string): number | null {
   const cleaned = text.replace(/[$,\s]/g, "");
@@ -168,7 +172,8 @@ function EnvelopeCard({
 }) {
   const id = useId();
   const notify = useToast();
-  const balance = envelopeBalance(envelope);
+  const coverage = goalCoverage(useAppState()).get(envelope.id);
+  const balance = coverage?.covered ?? envelopeBalance(envelope);
   const weekly = weeklyFor(envelope, balance);
   const [amount, setAmount] = useState(weekly > 0 ? String(weekly) : "");
   const [error, setError] = useState<string | null>(null);
@@ -243,6 +248,9 @@ function EnvelopeCard({
       </div>
 
       <EnvelopeBar balance={balance} target={envelope.target} label={`In your wallet for ${name}`} />
+      {coverage && coverage.fromWallet > 0 ? (
+        <p className={ui.meta}>Includes {usd0(coverage.fromWallet)} from your wallet balance.</p>
+      ) : null}
 
       {mode === "full" ? (
         <div className={styles.cardBody}>
@@ -405,6 +413,7 @@ function GeneralCard({
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const balance = wallet ? wallet.balance : fallbackBalance;
+  const unassigned = walletUnassigned(useAppState());
   const history: HistoryItem[] = (wallet?.entries ?? [])
     .map((entry) => ({
       key: entry.id,
@@ -434,7 +443,11 @@ function GeneralCard({
           <h2 id={`${id}-title`} className={styles.cardTitle}>
             {canAdd ? "Add money" : "Wallet balance"}
           </h2>
-          <p className={ui.meta}>No goal needed. It stays in your wallet until you withdraw it to your card.</p>
+          <p className={ui.meta}>
+            No goal needed: it counts toward your goals, soonest first, and stays in your wallet until you withdraw it
+            to your card.
+            {unassigned < balance ? ` ${usd0(round(balance - unassigned))} of it is covering your goals now.` : ""}
+          </p>
         </div>
         <p className={styles.addBalance}>
           <span className={styles.totalLabel}>Balance</span>

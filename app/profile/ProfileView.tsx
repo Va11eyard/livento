@@ -11,7 +11,7 @@ import { useToast } from "@/components/app/Toast";
 import ui from "@/components/app/ui.module.css";
 import { errorMessage, getHealth, subscribeAlerts } from "@/lib/client-api";
 import { isoDatePart, todayISO } from "@/lib/dates";
-import { envelopeBalance, socialOf, useAppState, useHydrated, useProfileMedia, walletTotal } from "@/lib/storage";
+import { goalBalance, socialOf, useAppState, useHydrated, useProfileMedia, walletTotal } from "@/lib/storage";
 import type { AppState, Profile } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import { EditProfileDialog } from "./EditProfileDialog";
@@ -214,7 +214,7 @@ function ProfileScreen({ state, profile }: { state: AppState; profile: Profile }
                     {env.eventDate ? `Event ${formatDate(env.eventDate, "medium")} · ` : ""}
                     Needed by {formatDate(env.deadline, "medium")}
                   </p>
-                  <EnvelopeBar balance={envelopeBalance(env)} target={env.target} label={`Saved for ${env.eventName}`} />
+                  <EnvelopeBar balance={goalBalance(state, env)} target={env.target} label={`Saved for ${env.eventName}`} />
                 </li>
               ))}
             </ul>

@@ -12,7 +12,7 @@ import { NoProfile, Notice, PageSkeleton, SampleBanner } from "@/components/app/
 import { useToast } from "@/components/app/Toast";
 import ui from "@/components/app/ui.module.css";
 import { errorMessage, insights, isAbortError } from "@/lib/client-api";
-import { clearInsights, getAppState, hasPremium, setInsights, useAppState, useHydrated } from "@/lib/storage";
+import { clearInsights, getAppState, goalBalance, hasPremium, setInsights, useAppState, useHydrated } from "@/lib/storage";
 import type { AppState, Envelope, InsightsMonth, InsightsRequest, InsightsSummary } from "@/lib/types";
 import {
   categoryTotals,
@@ -103,7 +103,7 @@ function describeSave(
 }
 
 function GoalRow({ envelope, extraWeekly }: { envelope: Envelope; extraWeekly: number }) {
-  const impact = goalImpact(envelope, extraWeekly);
+  const impact = goalImpact(envelope, extraWeekly, undefined, goalBalance(useAppState(), envelope));
   let text: ReactNode;
   if (impact.kind === "funded") {
     text = "Fully set aside.";

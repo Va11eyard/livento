@@ -907,6 +907,41 @@ export function walletTotal(state: AppState): number {
   return round2(totalSetAside(state.envelopes) + (state.walletGeneral ?? 0));
 }
 
+export interface GoalCoverage {
+  own: number; // added to this goal itself (by card or auto-save)
+  fromWallet: number; // the part of the wallet's general balance counted toward it
+  covered: number; // own + fromWallet
+}
+
+/**
+ * Money added without a goal still counts toward goals: the wallet's general balance covers
+ * goals in order of their deadlines (soonest first), up to each goal's target.
+ */
+export function goalCoverage(state: AppState): Map<string, GoalCoverage> {
+  let available = Math.max(0, state.walletGeneral ?? 0);
+  const out = new Map<string, GoalCoverage>();
+  const byDeadline = [...state.envelopes].sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
+  for (const env of byDeadline) {
+    const own = envelopeBalance(env);
+    const fromWallet = round2(Math.min(Math.max(0, env.target - own), available));
+    available = round2(available - fromWallet);
+    out.set(env.id, { own, fromWallet, covered: round2(own + fromWallet) });
+  }
+  return out;
+}
+
+/** What a goal has toward its target: its own money plus its share of the general balance. */
+export function goalBalance(state: AppState, env: Envelope): number {
+  return goalCoverage(state).get(env.id)?.covered ?? envelopeBalance(env);
+}
+
+/** General wallet money not counted toward any goal yet. */
+export function walletUnassigned(state: AppState): number {
+  let used = 0;
+  for (const c of goalCoverage(state).values()) used += c.fromWallet;
+  return round2(Math.max(0, (state.walletGeneral ?? 0) - used));
+}
+
 /** USD per week the user can put toward experiences (monthly fun budget ÷ 4.33). */
 export function weeklyContribution(profile: Profile): number {
   return profile.monthlyFunBudget / WEEKS_PER_MONTH;
