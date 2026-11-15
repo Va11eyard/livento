@@ -119,7 +119,7 @@ export function EventMap({ map, where }: { map: MapInfo; where?: string }) {
           ) : null}
         </div>
       ) : null}
-      <div className={ui.actions}>
+      <div className={`${ui.actions} ${styles.mapActions}`}>
         <a className="pill small" href={map.open} target="_blank" rel="noopener noreferrer">
           Open in Google Maps<span className="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>
         </a>

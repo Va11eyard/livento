@@ -224,3 +224,8 @@
     grid-column: auto;
   }
 }
+
+/* Space between the map (or the hotel list's last rule) and its buttons */
+.mapActions {
+  margin-top: 24px;
+}
