@@ -416,7 +416,7 @@ const TravelInput = z.object({
 });
 
 const PlacesInput = z.object({
-  kind: z.enum(PLACE_KINDS).describe("What to look for: restaurant, cafe, bar, fast_food, dessert, museum, gallery, park, attraction, cinema, theatre, nightclub, bowling, zoo or aquarium."),
+  kind: z.enum(PLACE_KINDS).describe("What to look for: restaurant, cafe, bar, fast_food, dessert, museum, gallery, park, attraction, cinema, theatre, nightclub, bowling, zoo, aquarium or hotel."),
   event_id: z.string().max(200).describe("A Livento event id: search around its venue (e.g. dinner before the show).").optional(),
   near: z.string().max(120).describe("A neighborhood, landmark or venue name to search around.").optional(),
   city: z.string().max(100).describe("City; defaults to the user's home city.").optional(),
@@ -426,7 +426,7 @@ const PlacesInput = z.object({
 });
 
 const PLACES_DESCRIPTION =
-  "Real places from OpenStreetMap map data: restaurants, cafes, bars, quick food, dessert, museums, galleries, parks, attractions, cinemas, theatres, nightclubs, bowling, zoos and aquariums " +
+  "Real places from OpenStreetMap map data: restaurants, cafes, bars, quick food, dessert, museums, galleries, parks, attractions, cinemas, theatres, nightclubs, bowling, zoos, aquariums and hotels " +
   "near the user's city, a neighborhood or landmark, or an event's venue. Returns up to 6 named places, nearest first, with cuisine, address, opening hours when known and miles away, " +
   "plus map buttons. There are no prices in map data: never state or guess a price for these places. " +
   "Call this whenever the user asks where to eat, drink or hang out, for cheap or free things to do that aren't ticketed events, or for places near an event.";

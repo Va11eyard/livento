@@ -29,6 +29,7 @@ export const PLACE_KINDS = [
   "bowling",
   "zoo",
   "aquarium",
+  "hotel",
 ] as const;
 export type PlaceKind = (typeof PLACE_KINDS)[number];
 
@@ -49,6 +50,7 @@ const PHRASES: Record<PlaceKind, string> = {
   bowling: "bowling alley",
   zoo: "zoo",
   aquarium: "aquarium",
+  hotel: "hotel",
 };
 
 export interface Place {

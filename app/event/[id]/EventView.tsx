@@ -44,6 +44,7 @@ import {
   weeklyContribution,
 } from "@/lib/storage";
 import type { AppState, ComparatorEvent, CostOverrides, Envelope, LiventoEvent, PlanResult, Profile } from "@/lib/types";
+import { EventMap, type MapInfo } from "./EventMap";
 import styles from "./event.module.css";
 
 function byDate(a: LiventoEvent, b: LiventoEvent): number {
@@ -62,7 +63,7 @@ function comparatorSide(name: string, plan: PlanResult): ComparatorEvent {
  * hotel search nearby. Venue + city + state when there's a venue, else the event's
  * coordinates, else the city. None for sample events (fictional places).
  */
-function mapLinks(event: LiventoEvent): { label: string; embed: string; open: string; hotels: string } | null {
+function mapLinks(event: LiventoEvent): MapInfo | null {
   if (event.source === "sample") return null;
   const place = eventPlace(event);
   const text = [event.venue, place].filter(Boolean).join(", ");
@@ -74,8 +75,15 @@ function mapLinks(event: LiventoEvent): { label: string; embed: string; open: st
     label: text || query,
     // hl=en: the page is English; otherwise Google labels the map in the visitor's IP language.
     embed: `https://www.google.com/maps?${new URLSearchParams({ q: query, hl: "en", output: "embed" })}`,
+    hotelsEmbed: `https://www.google.com/maps?${new URLSearchParams({ q: `hotels near ${near}`, hl: "en", output: "embed" })}`,
     open: `https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query })}`,
     hotels: `https://www.google.com/travel/hotels?${new URLSearchParams({ q: `hotels near ${near}` })}`,
+    near: {
+      ...(event.venue ? { venue: event.venue } : {}),
+      ...(event.city ? { city: event.city } : {}),
+      ...(event.state ? { state: event.state } : {}),
+      ...(isLatLng(event) ? { lat: event.lat, lng: event.lng } : {}),
+    },
   };
 }
 
@@ -405,31 +413,7 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
         <p className={ui.meta}>Times are shown in your time zone. Always confirm on the official ticket page.</p>
       </section>
 
-      {map ? (
-        <section className={ui.blockRule} aria-labelledby="map-title">
-          <div className={ui.sectionHead}>
-            <h2 id="map-title" className={ui.sectionTitle}>
-              Map
-            </h2>
-            {where ? <span className={ui.meta}>{where}</span> : null}
-          </div>
-          <iframe
-            className={styles.map}
-            src={map.embed}
-            title={`Map of ${map.label}`}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-          <div className={ui.actions}>
-            <a className="pill small" href={map.open} target="_blank" rel="noopener noreferrer">
-              Open in Google Maps<span className="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>
-            </a>
-            <a className="pill small alt" href={map.hotels} target="_blank" rel="noopener noreferrer">
-              Hotels nearby<span className="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>
-            </a>
-          </div>
-        </section>
-      ) : null}
+      {map ? <EventMap map={map} where={where} /> : null}
 
       <section className={ui.blockRule} aria-labelledby="cost-title">
         <div className={ui.sectionHead}>
