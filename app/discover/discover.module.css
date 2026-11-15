@@ -64,11 +64,12 @@
 }
 
 /* Alerts */
+/* Text on the left, the action(s) on the right edge, both vertically centered. */
 .alerts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: 20px 40px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 40px;
+  align-items: center;
 }
 
 .alertsIntro {
@@ -79,10 +80,25 @@
 .alertsForm {
   display: grid;
   gap: 12px;
+  justify-items: end;
+  min-width: min(100%, 340px);
 }
 
+.alertsForm > * {
+  width: 100%;
+}
+
+.alertsForm > :last-child {
+  width: auto;
+}
+
+/* The live region stays in the DOM (for screen readers) but takes no space while empty. */
 .alertsResult {
   grid-column: 1 / -1;
+}
+
+.alertsResult:not(:empty) {
+  margin-top: 16px;
 }
 
 .okText {
@@ -93,5 +109,11 @@
 @media (max-width: 767px) {
   .alerts {
     grid-template-columns: 1fr;
+    row-gap: 18px;
+  }
+
+  .alertsForm {
+    justify-items: start;
+    min-width: 0;
   }
 }
