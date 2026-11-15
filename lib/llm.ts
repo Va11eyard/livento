@@ -17,14 +17,15 @@
  * balance too low, 401, 403, 404, no connection, overloaded) pauses Claude for
  * 10 minutes on this instance and Gemini (lib/gemini.ts, GEMINI_API_KEY) takes
  * over, within the same request. With only GEMINI_API_KEY, Gemini answers.
- * The three calls below fall back the same way (geminiStructured).
+ * The three background calls below (picks, roadmap, merchant categories) use only Claude
+ * and otherwise their rule-based fallbacks, saving the Gemini quota for Ask Livento and quotes.
  */
 import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { geminiConfigured, geminiStructured } from "./gemini";
+import { geminiConfigured } from "./gemini";
 import { SPEND_CATEGORIES, type SpendCategory } from "./spending";
 import { CATEGORY_LABELS, type LiventoEvent, type Profile, type RoadmapStep } from "./types";
 
@@ -153,7 +154,6 @@ async function structuredCall<S extends z.ZodType>(call: StructuredCall<S>): Pro
   }
   // Background wording (picks, roadmap, merchant categories) never falls back to Gemini: its free
   // quota is tiny and is kept for Ask Livento and quotes. These features have rule-based fallbacks.
-  void geminiStructured;
   return null;
 }
 
