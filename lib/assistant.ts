@@ -522,7 +522,7 @@ async function costPlan(ctx: ToolContext, input: z.infer<typeof CostInput>) {
   const envelope = ctx.envelopes.find((e) => e.eventId === event.id);
   const plan = buildPlan(event, ctx.profile, envelope?.balance ?? 0, input.tickets ? { tickets: input.tickets } : undefined, ctx.today);
   if (!envelope) addAction(ctx, "Start saving", eventPath(event.id));
-  addAction(ctx, "Roadmap", `/roadmap/${encodeURIComponent(event.id)}`);
+  addAction(ctx, `Roadmap: ${event.name.length > 28 ? `${event.name.slice(0, 27)}…` : event.name}`, `/roadmap/${encodeURIComponent(event.id)}`);
   return {
     event: eventFacts(event, ctx),
     lines: plan.lines.map((l) => ({ item: l.label, amount: l.amount, estimate: l.estimate, note: l.note })),
