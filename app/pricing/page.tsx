@@ -6,7 +6,7 @@ import { PricingView } from "./PricingView";
 
 export const metadata: Metadata = {
   title: "Pricing · Livento",
-  description: "Free: events, picks and alerts. Premium ($4.99/month or $39/year, test price): the Livento wallet with automatic weekly saving, comparator, roadmap and spending breakdown.",
+  description: "Free: events, picks and alerts. Premium ($4.99/month or $39/year): the Livento wallet with automatic weekly saving, comparator, roadmap and spending breakdown.",
 };
 
 export default function PricingPage() {

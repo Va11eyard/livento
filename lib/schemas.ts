@@ -4,7 +4,7 @@
  * Optional arrays/flags get safe defaults so slightly older clients still validate.
  */
 import { z } from "zod";
-import { CATEGORIES } from "./types";
+import { CATEGORIES, GENERAL_ENVELOPE_ID } from "./types";
 
 export const CategorySchema = z.enum(CATEGORIES);
 
@@ -251,8 +251,14 @@ export const LogRequestSchema = z.object({
 /** Envelope ids are UUIDs (lib/storage newId), so `as_<id>` fits Stripe's 40-char metadata keys. */
 export const ENVELOPE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A goal's envelope id, or the reserved id of the general balance (money with no goal, never auto-saved). */
+export function isWalletEnvelopeId(id: string): boolean {
+  return id === GENERAL_ENVELOPE_ID || ENVELOPE_ID.test(id);
+}
+
 const walletToken = z.string().trim().min(10).max(120);
 const envelopeId = z.string().trim().regex(ENVELOPE_ID, "Unknown envelope.");
+const walletEnvelopeId = z.string().trim().refine(isWalletEnvelopeId, "Unknown envelope.");
 /** USD 1–2000, rounded to cents. */
 const walletAmount = z
   .number()
@@ -264,10 +270,10 @@ export const WalletTokenSchema = z.object({ token: walletToken });
 
 export const WalletDepositSchema = z.object({
   token: walletToken,
-  envelopeId,
+  envelopeId: walletEnvelopeId,
   eventName: z.string().trim().min(1).max(300),
   amount: walletAmount,
-  target: money(1_000_000),
+  target: money(1_000_000).optional(),
   autosave: z.boolean().optional(),
 });
 
@@ -278,7 +284,7 @@ export const WalletConfirmSchema = z.object({
 
 export const WalletWithdrawSchema = z.object({
   token: walletToken,
-  envelopeId,
+  envelopeId: walletEnvelopeId,
   amount: walletAmount.optional(),
   requestId: z.string().trim().regex(/^[A-Za-z0-9-]{8,80}$/).optional(),
 });

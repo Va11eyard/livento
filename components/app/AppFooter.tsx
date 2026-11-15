@@ -6,7 +6,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { useToast } from "./Toast";
 import styles from "./AppFooter.module.css";
 
-/** Compact yellow footer: motto, where data and money live, and a one-click way to clear this browser. */
+/** Compact yellow footer: motto, where data and money live, a one-click way to clear this browser, data credits. */
 export function AppFooter() {
   const notify = useToast();
   return (
@@ -25,7 +25,6 @@ export function AppFooter() {
             <Link href="/discover">Discover</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/profile">Profile</Link>
-            <Link href="/status">Status</Link>
             <ConfirmDialog
               triggerLabel="Clear my data"
               triggerClassName={styles.clear}
@@ -40,6 +39,13 @@ export function AppFooter() {
             />
           </nav>
         </div>
+        <p className={styles.credits}>
+          Sports data:{" "}
+          <a href="https://www.thesportsdb.com" target="_blank" rel="noopener noreferrer">
+            TheSportsDB<span className="sr-only"> (opens in a new tab)</span>
+          </a>
+          . Event images belong to their organizers.
+        </p>
       </div>
     </footer>
   );

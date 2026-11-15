@@ -4,7 +4,7 @@ import { CheckoutRequestSchema } from "@/lib/schemas";
 import { PRICING, type CheckoutResponse } from "@/lib/types";
 
 const DEMO_MESSAGE = "Payments aren't connected on this demo. Use Demo unlock to try Premium — no charge.";
-const UNAVAILABLE_MESSAGE = "Test checkout is unavailable right now. You can use Demo unlock — no charge.";
+const UNAVAILABLE_MESSAGE = "Checkout is unavailable right now. You can use Demo unlock — no charge.";
 
 /**
  * POST /api/checkout — Stripe Checkout (test mode only) via REST; `{ demo: true }`
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     "line_items[0][price_data][recurring][interval]": yearly ? "year" : "month",
     "line_items[0][price_data][product_data][name]": `Livento Premium (${yearly ? "yearly" : "monthly"})`,
     "line_items[0][price_data][product_data][description]":
-      "Test mode — no real charge. Livento wallet with automatic weekly saving, spend-vs-save comparator, trip roadmap and spending breakdown.",
+      "Livento wallet with automatic weekly saving, spend-vs-save comparator, trip roadmap and spending breakdown.",
     "metadata[app]": "livento-premium",
     // USD only and an English page, wherever the visitor is (no Adaptive Pricing conversion).
     "adaptive_pricing[enabled]": "false",
@@ -59,10 +59,7 @@ export async function POST(request: Request) {
       console.warn(`[checkout] Stripe HTTP ${res.status}`);
       return json<CheckoutResponse>({ demo: true, message: UNAVAILABLE_MESSAGE });
     }
-    return json<CheckoutResponse>({
-      url: data.url,
-      message: "Stripe test mode — no real charge. Test card: 4242 4242 4242 4242.",
-    });
+    return json<CheckoutResponse>({ url: data.url });
   } catch {
     console.warn("[checkout] Stripe request failed");
     return json<CheckoutResponse>({ demo: true, message: UNAVAILABLE_MESSAGE });

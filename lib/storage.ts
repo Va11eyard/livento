@@ -19,6 +19,7 @@ import { todayISO } from "@/lib/dates";
 import {
   CATEGORIES,
   COVER_PRESETS,
+  GENERAL_ENVELOPE_ID,
   PROFILE_LIMITS,
   PROFILE_MEDIA_KEY,
   STORAGE_KEY,
@@ -266,6 +267,12 @@ export function sanitizeInsights(raw: unknown): InsightsSummary | undefined {
   };
 }
 
+/** The general wallet balance (USD, money with no goal): a positive amount, else nothing. */
+function sanitizeGeneral(raw: unknown): number | undefined {
+  const n = finite(raw);
+  return n !== undefined && n > 0 ? round2(Math.min(n, 10_000_000)) : undefined;
+}
+
 /** "<cus id>.<mac>" from POST /api/wallet; anything else is dropped. */
 function sanitizeWallet(raw: unknown): WalletLink | undefined {
   if (!raw || typeof raw !== "object") return undefined;
@@ -351,6 +358,7 @@ function normalizeState(raw: unknown): AppState {
     anonId: isString(r.anonId) && r.anonId ? r.anonId : newId(),
     insights: sanitizeInsights(r.insights),
     wallet: sanitizeWallet(r.wallet),
+    walletGeneral: sanitizeGeneral(r.walletGeneral),
     social: sanitizeSocial(r.social),
     telegram: sanitizeTelegram(r.telegram),
   };
@@ -661,12 +669,15 @@ export function clearWallet() {
 
 /**
  * Replaces every envelope's deposits with the Stripe ledger entries from the wallet
- * summary, so Comparator, CostTable and the roadmap read real (test-mode) balances
- * through envelopeBalance(). Envelopes without wallet money end up with no deposits.
+ * summary, so Comparator, CostTable and the roadmap read real balances through
+ * envelopeBalance(). Envelopes without wallet money end up with no deposits. The
+ * general balance (money with no goal) is kept apart in `walletGeneral`; envelope
+ * ids are UUIDs, so it never lands on a goal.
  */
 export function syncEnvelopeLedger(summary: WalletSummary) {
   update((s) => {
-    let changed = false;
+    const walletGeneral = sanitizeGeneral(summary.envelopes[GENERAL_ENVELOPE_ID]?.balance);
+    let changed = walletGeneral !== s.walletGeneral;
     const envelopes = s.envelopes.map((e) => {
       const ledger = summary.envelopes[e.id.toLowerCase()] ?? summary.envelopes[e.id];
       const deposits: Deposit[] = (ledger?.entries ?? []).map((entry) => ({
@@ -679,7 +690,7 @@ export function syncEnvelopeLedger(summary: WalletSummary) {
       changed = true;
       return { ...e, deposits };
     });
-    return changed ? { ...s, envelopes } : s;
+    return changed ? { ...s, envelopes, walletGeneral } : s;
   });
 }
 
@@ -889,6 +900,11 @@ export function envelopeBalance(env: Envelope): number {
 /** USD held across all envelopes in the wallet. */
 export function totalSetAside(envelopes: Envelope[]): number {
   return round2(envelopes.reduce((total, e) => total + envelopeBalance(e), 0));
+}
+
+/** USD in the whole wallet: every envelope plus the general balance (money with no goal). */
+export function walletTotal(state: AppState): number {
+  return round2(totalSetAside(state.envelopes) + (state.walletGeneral ?? 0));
 }
 
 /** USD per week the user can put toward experiences (monthly fun budget ÷ 4.33). */

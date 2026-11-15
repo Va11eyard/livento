@@ -23,24 +23,16 @@ import { getTicketmasterEventById, getTicketmasterEvents, ticketmasterIdOf } fro
 import type { Category, EventsResponse, LiventoEvent, WebSearchState } from "./types";
 import { cachedWebEvents, getWebEventById, isWebEventId } from "./webEvents";
 
-const TM_STALE_NOTICE =
-  "Live events are unavailable right now — showing Ticketmaster results saved in the last 24 hours";
-const LIVE_NOTICE =
-  "Sports are live from TheSportsDB; concerts, shows and more are found by AI web search — check each official page.";
-const WEB_NOTICE = "Concerts, shows and more are found by AI web search — check each official page.";
-const SPORTS_ONLY_NOTICE =
-  "Real upcoming games from TheSportsDB. Ticket prices aren't listed, so cost plans use labeled estimates.";
-const SPORTS_WEB_EMPTY_NOTICE =
-  "Sports are live from TheSportsDB. AI web search found no matching concerts or shows nearby yet.";
-
 /** Same wording as Discover's empty state. */
 const noEventsNotice = (city?: string) =>
   `No events found ${city ? `near ${city}` : "nearby"} yet. Try a bigger travel radius or more interests.`;
 
-/** Discover's note for the no-Ticketmaster mix. Never mentions Ticketmaster. */
-function catalogNotice(sports: number, web: number, state: WebSearchState, city?: string): string {
-  if (web > 0 || state === "pending") return sports > 0 ? LIVE_NOTICE : WEB_NOTICE;
-  if (sports > 0) return state === "off" ? SPORTS_ONLY_NOTICE : SPORTS_WEB_EMPTY_NOTICE;
+/**
+ * Discover's note for the no-Ticketmaster mix: only when nothing real turned up nearby
+ * (curated experiences may still be listed). Never names a data source.
+ */
+function catalogNotice(sports: number, web: number, state: WebSearchState, city?: string): string | undefined {
+  if (sports > 0 || web > 0 || state === "pending") return undefined;
   return noEventsNotice(city);
 }
 
@@ -252,15 +244,8 @@ export async function findEvents(q: CatalogQuery, today: string = todayISO()): P
   if (live !== null) {
     const events = live.events.map((e) => (e.distanceMiles === undefined ? withDistance(e, origin) : e));
     let notice: string | undefined;
-    if (live.stale) {
-      notice = TM_STALE_NOTICE;
-    } else if (events.length === 0) {
-      notice = curated.length
-        ? "No live events matched these filters — showing big experiences"
-        : "No live events matched these filters";
-    } else if (categories.includes("cinema")) {
-      notice = "Cinema listings aren't available from Ticketmaster";
-    }
+    if (events.length === 0) notice = noEventsNotice(city);
+    else if (categories.includes("cinema")) notice = "Cinema listings aren't available yet.";
     return {
       events: [...events, ...(await withPreviewImages(curated))],
       source: curated.length ? "mixed" : "ticketmaster",
@@ -292,11 +277,12 @@ export async function findEvents(q: CatalogQuery, today: string = todayISO()): P
     withPreviewImages([...found, ...curated.sort(byNearest(city, state))]),
   ]);
   const sports = games.filter((e) => matchesKeyword(e, keyword)).map((e) => withDistance(e, origin));
+  const notice = catalogNotice(sports.length, found.length, web.state, city);
 
   return {
     events: [...sports, ...pictured],
     source: "mixed",
-    notice: catalogNotice(sports.length, found.length, web.state, city),
+    ...(notice ? { notice } : {}),
     webSearch: web.state,
   };
 }

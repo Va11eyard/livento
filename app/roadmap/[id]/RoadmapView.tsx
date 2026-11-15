@@ -104,7 +104,7 @@ function Roadmap({ event, profile, state }: { event: LiventoEvent; profile: Prof
       {!premium ? (
         <PremiumGate
           title="Roadmaps are Premium"
-          description="Get dated steps for this event: when to start saving, presale reminders, when to ask for time off, travel and hotel links with your dates, and a day-of checklist."
+          description="Get dated steps for this event: when to save and buy tickets, and a day-of checklist. Trips out of town also get time off, travel and hotel links for your dates."
         />
       ) : (
         <section aria-labelledby="steps-title" aria-busy={result.loading}>
@@ -184,9 +184,6 @@ function Roadmap({ event, profile, state }: { event: LiventoEvent; profile: Prof
                   })}
                 </Accordion.Root>
                 <p className={`${ui.meta} ${styles.footnote}`}>
-                  {result.data.writer === "llm"
-                    ? "Step text written by AI from your plan. Every date and dollar amount comes from Livento's rules, not the AI."
-                    : "Built from Livento's templates and your plan's numbers."}{" "}
                   Links open the official or search pages in a new tab; Livento doesn&rsquo;t book anything.
                   {steps.length > dated.length
                     ? ` ${steps.length - dated.length} step${steps.length - dated.length === 1 ? " has" : "s have"} no date and ${steps.length - dated.length === 1 ? "isn't" : "aren't"} in the calendar file.`

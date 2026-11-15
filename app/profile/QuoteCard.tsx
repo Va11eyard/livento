@@ -13,7 +13,7 @@ import styles from "./profile.module.css";
 const SOURCE_LABELS: Record<ProfileQuote["source"], string> = {
   curated: "Picked by Livento",
   custom: "Written by you",
-  ai: "Written by AI from your goals",
+  ai: "Inspired by your goals",
 };
 
 function curated(text: string, index: number | undefined): ProfileQuote {

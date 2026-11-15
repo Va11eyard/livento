@@ -15,7 +15,7 @@ import {
 import { categoryTotals, coveredDays, monthlyAverage } from "@/app/insights/plan";
 import { askAssistant, assistantStatus, errorMessage } from "@/lib/client-api";
 import { todayISO } from "@/lib/dates";
-import { envelopeBalance, getAppState, newId, totalSetAside } from "@/lib/storage";
+import { envelopeBalance, getAppState, newId, walletTotal } from "@/lib/storage";
 import type { AppState, AssistantAction, AssistantChatMessage, AssistantContext } from "@/lib/types";
 import styles from "./Assistant.module.css";
 import ui from "./ui.module.css";
@@ -29,7 +29,7 @@ const MAX_SENT = 20; // messages per request (API limit)
 const MAX_CHARS = 2_000; // per message (API limit)
 const MAX_KEPT = 40;
 const OFF_TEXT = "The AI helper isn't connected on this deployment yet.";
-const FOOTNOTE = "AI helper · numbers come from Livento's calculators · not financial advice";
+const FOOTNOTE = "AI helper · not financial advice";
 
 interface ChatItem {
   id: string;
@@ -160,7 +160,7 @@ function buildContext(state: AppState, pathname: string): AssistantContext {
       balance: cap(envelopeBalance(e), 1_000_000) ?? 0,
       deadline: e.deadline,
     })),
-    walletTotal: cap(totalSetAside(state.envelopes), 10_000_000),
+    walletTotal: cap(walletTotal(state), 10_000_000),
     spending:
       state.insights && months.length
         ? {

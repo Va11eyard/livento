@@ -299,9 +299,7 @@ function Results({
       <div className={styles.resultHead}>
         <p className={ui.meta}>
           {isSample ? <span className="tag sample">Sample data</span> : null} Saved on this device · {monthRange(months)} ·{" "}
-          {plural(purchases, "purchase")} ·{" "}
-          {summary.classifier === "rules+llm" ? "Rules, plus AI for unclear merchants" : "Rule-based categories"} · Updated{" "}
-          {savedOn(summary.analyzedAt)}
+          {plural(purchases, "purchase")} · Updated {savedOn(summary.analyzedAt)}
         </p>
         <ConfirmDialog
           triggerLabel="Delete summary"
@@ -475,9 +473,7 @@ function Results({
       {categories.length ? <SpendLessPlan categories={categories} envelopes={envelopes} /> : null}
 
       <p className={`${ui.meta} ${styles.method}`}>
-        Categories come from merchant names
-        {summary.classifier === "rules+llm" ? "; AI sorted the merchants the rules didn't recognize" : ""}. Transfers and
-        income are left out. Monthly figures are averages over the days the statements cover; weekly figures are monthly
+        Categories come from merchant names. Transfers and income are left out. Monthly figures are averages over the days the statements cover; weekly figures are monthly
         ÷ 4.33.
       </p>
     </div>

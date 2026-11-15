@@ -7,7 +7,7 @@ import { EnvelopesView } from "./EnvelopesView";
 export const metadata: Metadata = {
   title: "Wallet · Livento",
   description:
-    "Your Livento wallet: an envelope for each experience you're saving for. Add money by card, save automatically every week, withdraw to your card anytime. Stripe test mode: no real money moves.",
+    "Your Livento wallet: add money by card, keep an envelope for each experience you're saving for, save automatically every week and withdraw to your card anytime.",
 };
 
 export default function EnvelopesPage() {

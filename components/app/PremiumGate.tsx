@@ -9,10 +9,10 @@ import { useToast } from "./Toast";
 import styles from "./PremiumGate.module.css";
 
 export const PREMIUM_FEATURES = [
-  "Livento wallet with an envelope for each goal",
+  "Livento wallet: add money anytime, with an envelope for each goal",
   "Automatic weekly withdrawal from your card into the wallet",
   "Spend-vs-save comparator between two events",
-  "Trip roadmap with dated steps and hotel links",
+  "Trip roadmap with dated steps, plus travel and hotel links for trips out of town",
   "Spending breakdown from your bank statement",
 ] as const;
 
@@ -44,8 +44,7 @@ export function PremiumGate({
         ))}
       </ul>
       <p className={styles.price}>
-        <strong>{usd(PRICING.monthly)}/month</strong> or <strong>{usd(PRICING.yearly)}/year</strong>{" "}
-        <span className="tag">Test price</span>
+        <strong>{usd(PRICING.monthly)}/month</strong> or <strong>{usd(PRICING.yearly)}/year</strong>
       </p>
       <p className={styles.fine}>Cancel anytime in one click. No hidden renewals.</p>
       <div className={styles.actions}>

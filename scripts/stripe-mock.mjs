@@ -249,7 +249,7 @@ const routes = [
     return c;
   }],
   ["POST", /^\/v1\/checkout\/sessions$/, (p) => {
-    allow(p, ["mode", "customer", "payment_method_types", "line_items", "payment_intent_data", "metadata", "success_url", "cancel_url"]);
+    allow(p, ["mode", "customer", "payment_method_types", "line_items", "payment_intent_data", "metadata", "success_url", "cancel_url", "adaptive_pricing", "locale"]);
     if (p.mode !== "payment") throw badRequest("This mock supports mode=payment only", { param: "mode" });
     if (!db.customers.has(p.customer) || db.customers.get(p.customer).deleted) throw missing("customer", p.customer);
     if (!Array.isArray(p.payment_method_types) || p.payment_method_types.join() !== "card") {

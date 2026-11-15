@@ -1,6 +1,6 @@
 import { apiError, json, parseBody } from "@/lib/http";
 import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
-import { ENVELOPE_ID, WalletConfirmSchema } from "@/lib/schemas";
+import { ENVELOPE_ID, WalletConfirmSchema, isWalletEnvelopeId } from "@/lib/schemas";
 import { stripeApi, stripeId, type StripeCheckoutSession, type StripePaymentIntent } from "@/lib/stripe";
 import type { WalletConfirmResponse } from "@/lib/types";
 import {
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     const paidCents = pi ? (Number.isInteger(pi.amount_received) ? (pi.amount_received as number) : pi.amount) : NaN;
     const confirmedEnvelope = (pi?.metadata?.livento_envelope ?? meta.livento_envelope ?? "").toLowerCase();
     const result: WalletConfirmResponse = buildSummary(ledger, current);
-    if (ENVELOPE_ID.test(confirmedEnvelope) && Number.isInteger(paidCents) && paidCents > 0) {
+    if (isWalletEnvelopeId(confirmedEnvelope) && Number.isInteger(paidCents) && paidCents > 0) {
       result.confirmed = { envelopeId: confirmedEnvelope, amount: paidCents / 100, autosave: meta.livento_autosave === "1" };
     }
     return json<WalletConfirmResponse>(result);

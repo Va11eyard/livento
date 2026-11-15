@@ -51,13 +51,7 @@ import { useStickyAsync } from "./useStickyAsync";
 const MORE_PAGE = 12;
 const MAX_RANKED = 300; // /api/recommend accepts up to 300 events
 
-// Same wording as lib/catalog's notices, for the list after web results are merged in.
-const LIVE_NOTICE =
-  "Sports are live from TheSportsDB; concerts, shows and more are found by AI web search — check each official page.";
-const WEB_NOTICE =
-  "Concerts, shows and more are found by AI web search — check each official page.";
-const SPORTS_WEB_EMPTY_NOTICE =
-  "Sports are live from TheSportsDB. AI web search found no matching concerts or shows nearby yet.";
+// Same wording as lib/catalog's empty notice.
 const noEventsNotice = (city: string) =>
   `No events found near ${city} yet. Try a bigger travel radius or more interests.`;
 
@@ -212,14 +206,12 @@ function Discover({ profile }: { profile: Profile }) {
   // Ranking has finished (with AI/rules picks, or with the by-date fallback after an error).
   const ranked = !!recs.data || showingStale || (!!recs.error && !!list);
 
+  // Once the extra results are in, the note shows only when nothing nearby turned up.
   let notice = base?.notice;
   if (base && list && webPending && webEvents) {
     const hasSports = list.some((e) => e.source === "thesportsdb");
-    if (webFound > 0) notice = hasSports ? LIVE_NOTICE : WEB_NOTICE;
-    else
-      notice = hasSports
-        ? SPORTS_WEB_EMPTY_NOTICE
-        : noEventsNotice(profile.city);
+    notice =
+      webFound > 0 || hasSports ? undefined : noEventsNotice(profile.city);
   }
   const pickIds = new Set(picks.map((p) => p.event.id));
   const visiblePicks = picks.filter(
@@ -284,7 +276,7 @@ function Discover({ profile }: { profile: Profile }) {
   else if (recs.loading)
     status = `Found ${list?.length ?? 0} events. Picking your top 8…`;
   else if (webSearching)
-    status = `Showing your top ${picks.length} picks. Searching the web for concerts and shows…`;
+    status = `Showing your top ${picks.length} picks. Looking for more events near ${profile.city}…`;
   else if (recs.data) status = `Showing your top ${picks.length} picks.`;
   else if (recs.error) status = "Showing upcoming events by date.";
 
@@ -353,9 +345,7 @@ function Discover({ profile }: { profile: Profile }) {
           {webSearching ? (
             <p className={styles.webRow} aria-hidden="true">
               <span className={styles.webDot} />
-              <span>
-                Searching the web for concerts and shows near {profile.city}…
-              </span>
+              <span>Looking for more events near {profile.city}…</span>
               <span className={ui.meta}>
                 This can take up to a minute. Everything below is ready to
                 browse.
@@ -366,8 +356,8 @@ function Discover({ profile }: { profile: Profile }) {
           {webPending && web.error && !webEvents ? (
             <div className={styles.banner}>
               <Notice label="Heads up">
-                We couldn&rsquo;t finish the web search for concerts and shows
-                just now, so some may be missing.{" "}
+                We couldn&rsquo;t finish looking for more events just now, so
+                some may be missing.{" "}
                 <button
                   type="button"
                   className={ui.textButton}
@@ -441,13 +431,6 @@ function Discover({ profile }: { profile: Profile }) {
                   <h2 id="top-picks-title" className={ui.sectionTitle}>
                     Top picks for you
                   </h2>
-                  {rankedData ? (
-                    <p className={ui.meta}>
-                      {rankedData.ranker === "llm"
-                        ? "Scored by Livento's rules, then ordered by AI"
-                        : "Scored by Livento's rules: interests, distance, budget, dates"}
-                    </p>
-                  ) : null}
                 </div>
 
                 {picksLoading ? (

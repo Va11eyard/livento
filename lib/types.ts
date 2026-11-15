@@ -128,6 +128,7 @@ export interface AppState {
   premiumSession?: string; // Stripe Checkout Session id of a test-mode Premium purchase (lets "Turn off" cancel it)
   anonId: string; // random id for anonymous interaction logging (FR-14)
   wallet?: WalletLink; // Livento wallet linked to this browser (no account)
+  walletGeneral?: number; // USD in the wallet's general balance (no goal), mirrored from the wallet summary
   insights?: InsightsSummary; // spending summary from /insights (never the raw file)
   social?: ProfileSocial; // name, bio, quote and cover for /profile (photos live under PROFILE_MEDIA_KEY)
   telegram?: TelegramLink; // this browser's link to the user's chat with the Livento bot
@@ -453,8 +454,8 @@ export interface WalletEnvelope {
 }
 export interface WalletSummary {
   testMode: true;
-  total: number; // USD across all envelopes
-  envelopes: Record<string, WalletEnvelope>; // keyed by envelope id
+  total: number; // USD across all envelopes, the general balance included
+  envelopes: Record<string, WalletEnvelope>; // keyed by envelope id; GENERAL_ENVELOPE_ID = money with no goal
 }
 export interface WalletCreateResponse {
   token: string;
@@ -464,11 +465,11 @@ export interface WalletTokenRequest {
 }
 export interface WalletDepositRequest {
   token: string;
-  envelopeId: string;
+  envelopeId: string; // a goal's envelope id, or GENERAL_ENVELOPE_ID for money with no goal
   eventName: string;
   amount: number; // USD 1–2000; with autosave this is the weekly amount and the first withdrawal
-  target: number; // USD goal; auto-save stops once the envelope reaches it
-  autosave?: boolean; // save the card and withdraw `amount` every week
+  target?: number; // USD goal; auto-save stops once the envelope reaches it (none for the general balance)
+  autosave?: boolean; // save the card and withdraw `amount` every week (goals only)
 }
 export interface WalletDepositResponse {
   url: string; // Stripe Checkout (test mode)
@@ -493,6 +494,9 @@ export interface WalletAutosaveRequest {
 }
 export const WALLET_MIN_AMOUNT = 1;
 export const WALLET_MAX_AMOUNT = 2000;
+/** Reserved envelope id for wallet money with no goal ("Add money" on /envelopes). Never auto-saved. */
+export const GENERAL_ENVELOPE_ID = "general";
+export const GENERAL_ENVELOPE_NAME = "Livento wallet";
 
 // POST /api/log  (FR-14, anonymous)
 export type InteractionAction = "open" | "like" | "skip" | "save";

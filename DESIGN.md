@@ -64,9 +64,10 @@ Fonts are bundled in `public/assets/fonts` with their licenses in `public/assets
 - `prefers-reduced-motion`: static posters instead of GIFs, no trail animation, no smooth scroll.
 
 ## Imagery
-- Event cards and event pages show the event's own image (user decision, 2026-11-15): the preview image of its source page (`og:image`, else `twitter:image`, the same image link previews show) for web-search events and curated experiences, TheSportsDB's event thumbnail for games, Ticketmaster's image for Ticketmaster events. Each is shown only with its own event, credited on the image ("Image: songkick.com", "Image: TheSportsDB"), alt text = the event name, same 1.5:1 cover crop.
-- Fallback: the local category photo when the event has no image of its own, its page lists several events, the image is a site logo or default picture, or it fails to load (hotlink-blocked).
-- Livento's own imagery (landing, trail, fallbacks): free-licensed photos (Unsplash / Pexels) of crowds, stages, festivals, cinemas; credited in `public/assets/CREDITS.md`, hashed in `public/assets/assets.json`. No trademarked imagery there: no theme-park castles or characters, no logos, no identifiable artist photos. Name places in text with official links.
+- Event cards and event pages show the event's own image (user decision, 2026-11-15): its official page's preview image (`og:image`, else `twitter:image`), TheSportsDB's game thumbnail, or Ticketmaster's image. Alt text = the event name, 1.5:1 cover crop. No credits on the image; one quiet footer line credits sources ("Sports data: TheSportsDB. Event images belong to their organizers.").
+- Fallback: a typographic poster (ink or yellow block, category kicker, the event name in large type, same 1.5:1 size) when the event has no image of its own, its page lists several events, the image is a site logo or default picture, or it fails to load. Never a stock photo for an event.
+- Livento's own imagery (landing, trail): free-licensed photos (Unsplash / Pexels) of crowds, stages, festivals, cinemas; credited in `public/assets/CREDITS.md`, hashed in `public/assets/assets.json`. No trademarked imagery there.
+- No user-facing notes about data sources, AI pipelines or test mode (user decision, 2026-11-15).
 
 ## Accessibility
 - Visible focus ring on every interactive element; keyboard reachable; skip link.

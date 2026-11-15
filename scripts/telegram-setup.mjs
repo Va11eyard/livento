@@ -36,7 +36,7 @@ const DESCRIPTION = [
   "",
   "Livento finds concerts, shows, sports and trips near you and shows the full cost: tickets, fees, travel and a hotel if you need one.",
   "",
-  "Pick what you love and the Livento wallet can save for it automatically, a little each week (Stripe test mode for now).",
+  "Pick what you love and the Livento wallet can save for it automatically, a little each week.",
   "",
   "Get your top picks right here in the chat, plus a quote when you need a nudge.",
   "",

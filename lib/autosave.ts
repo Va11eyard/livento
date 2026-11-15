@@ -90,7 +90,7 @@ async function runCustomer(customer: StripeCustomer, today: string, result: Auto
             payment_method_types: ["card"],
             off_session: true,
             confirm: true,
-            description: "Livento auto-save, weekly withdrawal (test mode)",
+            description: "Livento auto-save, weekly withdrawal",
             metadata: {
               livento_envelope: s.envelopeId,
               livento_kind: "autosave",

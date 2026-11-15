@@ -57,7 +57,7 @@ export function AppNav() {
           </span>
         ) : null}
         {premium !== "none" ? (
-          <span className="tag premium" title={premium === "demo" ? "Premium demo unlock, no charge" : "Premium (test mode)"}>
+          <span className="tag premium" title={premium === "demo" ? "Premium demo unlock, no charge" : "Premium"}>
             {premium === "demo" ? "Premium demo" : "Premium"}
           </span>
         ) : null}

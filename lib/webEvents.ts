@@ -877,7 +877,7 @@ function validateEvents(
       ...(priceMin !== undefined ? { priceMin } : {}),
       ...(priceMax !== undefined ? { priceMax } : {}),
       ...(priced
-        ? { currency: "USD", priceNote: `Price seen on ${domain} by AI web search — an estimate, check the official page` }
+        ? { currency: "USD", priceNote: `Price seen on ${domain} — an estimate, check the official page` }
         : {}),
       url,
       attribution: `Found by web search · ${domain}`,

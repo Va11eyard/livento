@@ -12,7 +12,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { addDays, utcToISODate } from "./dates";
 import { apiError } from "./http";
-import { ENVELOPE_ID } from "./schemas";
+import { ENVELOPE_ID, isWalletEnvelopeId } from "./schemas";
 import {
   isStripeError,
   stripeApi,
@@ -96,7 +96,7 @@ export function walletFailure(route: string, err: unknown): Response {
     if (err.code === "resource_missing" && /customer/i.test(err.message)) {
       return apiError("This wallet wasn't found. A new wallet will be created when you add money.", 404);
     }
-    if (err.status === 0) return apiError("Stripe test mode isn't answering right now. Please try again.", 502);
+    if (err.status === 0) return apiError("Stripe isn't answering right now. Please try again.", 502);
     if (err.status === 429) return apiError("Stripe is busy right now. Wait a few seconds and try again.", 503);
   } else {
     console.warn(`[wallet/${route}] unexpected failure`);
@@ -137,7 +137,7 @@ export interface Ledger {
 function toLedgerPayment(pi: StripePaymentIntent, seq: number): LedgerPayment | null {
   const meta = pi.metadata ?? {};
   const envelopeId = meta.livento_envelope;
-  if (pi.status !== "succeeded" || !envelopeId || !ENVELOPE_ID.test(envelopeId)) return null;
+  if (pi.status !== "succeeded" || !envelopeId || !isWalletEnvelopeId(envelopeId.toLowerCase())) return null;
   if (typeof pi.currency === "string" && pi.currency.toLowerCase() !== "usd") return null;
   const cents = Number.isInteger(pi.amount_received) ? (pi.amount_received as number) : pi.amount;
   if (!Number.isInteger(cents) || cents <= 0) return null;

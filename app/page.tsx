@@ -17,9 +17,9 @@ const CATEGORIES = ["Concerts", "Theatre", "Festivals", "Cinema", "Big experienc
 /** Section 01 roadmap. Plain content in an ordered list: nothing here is a control. */
 const ROADMAP = [
   { title: "Discover", text: "Events near you, ranked for your interests and budget." },
-  { title: "Plan", text: "The full cost with fees, travel and hotel, plus dated steps." },
-  { title: "Save", text: "Your Livento wallet saves for you: a weekly amount moves in from your card automatically." },
-  { title: "Go", text: "Presale reminders, hotel links and a day-of checklist." },
+  { title: "Plan", text: "The full cost: tickets, fees and travel, plus a hotel when the trip needs one." },
+  { title: "Save", text: "Add money to your Livento wallet, or turn on auto-save and a weekly amount moves in from your card." },
+  { title: "Go", text: "Dated steps to the day, hotel links for trips out of town and a day-of checklist." },
 ];
 
 const EXPERIENCES = [
@@ -60,7 +60,7 @@ const EXPERIENCES = [
 const STEPS = [
   {
     title: "Tell us what you love",
-    text: "Answer 8 quick questions about what you’re into, where you live and what you’d like to spend. No account, no email.",
+    text: "Answer 9 quick questions about what you’re into, where you live and what you’d like to spend. No account, no email.",
   },
   {
     title: "Get picks that fit",
@@ -78,7 +78,7 @@ const STEPS = [
   {
     title: "Get your roadmap",
     premium: true,
-    text: "A step-by-step plan for the trip: when to ask for time off, when presales open, and hotel links for your dates.",
+    text: "Dated steps from today to the day of: when to save and buy tickets, and a day-of checklist. Trips out of town also get time off, travel and hotel links for your dates.",
   },
   {
     title: "See where your money goes",
@@ -90,7 +90,7 @@ const STEPS = [
 const FREE_FEATURES = [
   "Events near you, from concerts to big trips",
   "Personalized recommendations",
-  "Event alerts by email or Telegram",
+  "Event alerts on Telegram",
 ];
 
 const PREMIUM_FEATURES = [
@@ -285,7 +285,7 @@ export default function Home() {
           </h2>
           <div className="foot-row">
             <p className="foot-copy">
-              Answer 8 quick questions and get your first plan in under two minutes. No account needed.
+              Answer 9 quick questions and get your first plan in under two minutes. No account needed.
             </p>
             <div className="actions foot-actions">
               <Link className="pill" href="/onboarding">
@@ -300,7 +300,6 @@ export default function Home() {
           <div className="end">
             <b className="brand">Livento</b>
             <a href="/assets/CREDITS.md">Image credits</a>
-            <Link href="/status">Status</Link>
             <a href="#top">
               Back to top <span aria-hidden="true">↑</span>
             </a>

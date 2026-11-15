@@ -783,7 +783,7 @@ async function placesTool(ctx: ToolContext, input: z.infer<typeof PlacesInput>) 
   return {
     around: [around, state].filter(Boolean).join(", "),
     kind: input.kind,
-    places: places.map(({ mapUrl: _mapUrl, ...rest }) => rest),
+    places: places.map((p) => ({ name: p.name, kind: p.kind, cuisine: p.cuisine, address: p.address, website: p.website, hours: p.hours, milesAway: p.milesAway })),
     note: places.length
       ? "From OpenStreetMap map data. No prices are known for these places."
       : "No matching places found nearby in the map data; try a bigger radius or another kind.",

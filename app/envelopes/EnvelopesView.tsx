@@ -32,11 +32,14 @@ import {
   removeEnvelope,
   setWallet,
   syncEnvelopeLedger,
-  totalSetAside,
   useAppState,
   useHydrated,
+  walletTotal,
 } from "@/lib/storage";
+import { todayISO } from "@/lib/dates";
 import {
+  GENERAL_ENVELOPE_ID,
+  GENERAL_ENVELOPE_NAME,
   WALLET_MAX_AMOUNT,
   WALLET_MIN_AMOUNT,
   type AppState,
@@ -81,10 +84,38 @@ function isWalletGone(err: unknown): boolean {
   return err instanceof ClientApiError && (err.status === 401 || err.status === 404);
 }
 
+/** Where added money goes: a goal's envelope, or the general balance (no goal, no target). */
+type DepositTarget = { id: string; eventName: string; target?: number };
+
+/** One row of an envelope's history, newest first. */
+type HistoryItem = { key: string; date: string; kind: WalletEntryKind; amount: number };
+
+function History({ items }: { items: HistoryItem[] }) {
+  return (
+    <details className={styles.history}>
+      <summary>
+        History ({items.length} {items.length === 1 ? "entry" : "entries"})
+      </summary>
+      <ul className={ui.plainList}>
+        {items.slice(0, HISTORY_LIMIT).map((d) => (
+          <li key={d.key}>
+            <span>{formatDate(d.date, "medium")}</span>
+            <span>{KIND_LABEL[d.kind]}</span>
+            <span className={styles.amount}>
+              {d.amount >= 0 ? "+" : "−"}
+              {usd(Math.abs(d.amount))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 interface WalletActions {
   busy: string | null;
   /** Opens Stripe Checkout; resolves with an error message when it couldn't. */
-  addMoney: (envelope: Envelope, amount: number, autosave: boolean) => Promise<string | null>;
+  addMoney: (to: DepositTarget, amount: number, autosave: boolean) => Promise<string | null>;
   stopAutosave: (envelopeId: string, name: string) => void;
   /** `version` = entries in the envelope's ledger: the same view retried gives the same request id. */
   withdraw: (envelopeId: string, name: string, amount: number, version: number) => void;
@@ -112,7 +143,7 @@ function WithdrawButton({
       triggerClassName="pill small alt"
       triggerAriaLabel={`Withdraw ${usd(balance)} for ${name} to your card`}
       title={`Withdraw ${usd(balance)} to your card?`}
-      description={`It goes back to the card it came from as a Stripe test refund. No real money moves.${
+      description={`It goes back to the card it came from.${
         autosaveOn ? " Auto-save stays on; stop it if you don't want more weekly withdrawals." : ""
       }`}
       confirmLabel={`Withdraw ${usd(balance)}`}
@@ -244,7 +275,7 @@ function EnvelopeCard({
             ) : (
               <p id={`${id}-help`} className="help">
                 {weekly > 0 ? `${usd0(weekly)} a week reaches the goal by ${formatDate(envelope.deadline, "medium")}. ` : ""}
-                You pay on Stripe&rsquo;s test checkout page.
+                You pay by card on Stripe&rsquo;s checkout page.
               </p>
             )}
           </form>
@@ -340,27 +371,128 @@ function EnvelopeCard({
             />
           ) : null}
           {history.length ? (
-            <details className={styles.history}>
-              <summary>
-                History ({history.length} {history.length === 1 ? "entry" : "entries"})
-              </summary>
-              <ul className={ui.plainList}>
-                {history.slice(0, HISTORY_LIMIT).map((d) => (
-                  <li key={d.ref}>
-                    <span>{formatDate(d.date, "medium")}</span>
-                    <span>{KIND_LABEL[d.kind ?? (d.amount < 0 ? "withdrawal" : "deposit")]}</span>
-                    <span className={styles.amount}>
-                      {d.amount >= 0 ? "+" : "−"}
-                      {usd(Math.abs(d.amount))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </details>
+            <History
+              items={history.map((d) => ({
+                key: d.ref ?? `${d.date}-${d.amount}`,
+                date: d.date,
+                kind: d.kind ?? (d.amount < 0 ? "withdrawal" : "deposit"),
+                amount: d.amount,
+              }))}
+            />
           ) : null}
         </div>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * The general balance: money added with no goal. `canAdd` (Premium) shows the amount
+ * field; withdrawing never needs Premium.
+ */
+function GeneralCard({
+  wallet,
+  fallbackBalance,
+  canAdd,
+  actions,
+}: {
+  wallet?: WalletEnvelope;
+  fallbackBalance: number;
+  canAdd: boolean;
+  actions: WalletActions;
+}) {
+  const id = useId();
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const balance = wallet ? wallet.balance : fallbackBalance;
+  const history: HistoryItem[] = (wallet?.entries ?? [])
+    .map((entry) => ({
+      key: entry.id,
+      date: todayISO(new Date(entry.date)), // the viewer's calendar date
+      kind: entry.kind,
+      amount: entry.amount,
+    }))
+    .reverse();
+  const busy = actions.busy !== null;
+
+  const onAdd = async (e: FormEvent) => {
+    e.preventDefault();
+    const value = parseAmount(amount);
+    if (value === null || value < WALLET_MIN_AMOUNT || value > WALLET_MAX_AMOUNT) {
+      setError(`Enter an amount from ${usd(WALLET_MIN_AMOUNT)} to ${usd0(WALLET_MAX_AMOUNT)}.`);
+      return;
+    }
+    setError(null);
+    const message = await actions.addMoney({ id: GENERAL_ENVELOPE_ID, eventName: GENERAL_ENVELOPE_NAME }, value, false);
+    if (message) setError(message);
+  };
+
+  return (
+    <section className={`${styles.card} ${styles.addCard}`} aria-labelledby={`${id}-title`}>
+      <div className={styles.cardHead}>
+        <div className={styles.cardIntro}>
+          <h2 id={`${id}-title`} className={styles.cardTitle}>
+            {canAdd ? "Add money" : "Wallet balance"}
+          </h2>
+          <p className={ui.meta}>No goal needed. It stays in your wallet until you withdraw it to your card.</p>
+        </div>
+        <p className={styles.addBalance}>
+          <span className={styles.totalLabel}>Balance</span>
+          <strong>{usd(balance)}</strong>
+        </p>
+      </div>
+
+      {canAdd ? (
+        <form className={styles.block} onSubmit={(e) => void onAdd(e)} noValidate>
+          <div className="field">
+            <label htmlFor={`${id}-amount`}>Amount ($)</label>
+            <div className={styles.amountRow}>
+              <input
+                id={`${id}-amount`}
+                inputMode="decimal"
+                placeholder="e.g. 50"
+                value={amount}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? `${id}-error` : `${id}-help`}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  setError(null);
+                }}
+              />
+              <button type="submit" className="pill" disabled={busy}>
+                {actions.busy === `add:${GENERAL_ENVELOPE_ID}` ? "Opening checkout…" : "Add money"}{" "}
+                <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </div>
+          {error ? (
+            <p id={`${id}-error`} className={ui.error} role="alert">
+              {error}
+            </p>
+          ) : (
+            <p id={`${id}-help`} className="help">
+              You pay by card on Stripe&rsquo;s checkout page.
+            </p>
+          )}
+        </form>
+      ) : null}
+
+      {(wallet && balance > 0) || history.length ? (
+        <div className={styles.cardFoot}>
+          {wallet && balance > 0 ? (
+            <WithdrawButton
+              envelopeId={GENERAL_ENVELOPE_ID}
+              name="your wallet balance"
+              balance={balance}
+              autosaveOn={false}
+              version={wallet?.entries.length ?? 0}
+              actions={actions}
+            />
+          ) : null}
+          {history.length ? <History items={history} /> : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -501,7 +633,7 @@ function Wallet({ state }: { state: AppState }) {
               : `The first ${usd(done.amount)} is in your wallet and covers the goal.`,
           );
         } else if (done) {
-          notify(`Added ${usd(done.amount)} to your wallet`, "Stripe test mode: no real money moves.");
+          notify(`Added ${usd(done.amount)} to your wallet`);
         } else {
           notify("Your wallet is up to date");
         }
@@ -535,8 +667,8 @@ function Wallet({ state }: { state: AppState }) {
 
   const actions: WalletActions = {
     busy,
-    addMoney: async (envelope, amount, autosave) => {
-      setBusy(`${autosave ? "autosave" : "add"}:${envelope.id}`);
+    addMoney: async (to, amount, autosave) => {
+      setBusy(`${autosave ? "autosave" : "add"}:${to.id}`);
       const open = async (fresh: boolean) => {
         let current = fresh ? undefined : getAppState().wallet?.token;
         if (!current) {
@@ -545,10 +677,10 @@ function Wallet({ state }: { state: AppState }) {
         }
         return walletDeposit({
           token: current,
-          envelopeId: envelope.id,
-          eventName: envelope.eventName,
+          envelopeId: to.id,
+          eventName: to.eventName,
           amount,
-          target: envelope.target,
+          target: to.target,
           autosave,
         });
       };
@@ -590,7 +722,7 @@ function Wallet({ state }: { state: AppState }) {
       walletWithdraw({ token: current, envelopeId, requestId })
         .then((next) => {
           apply(next);
-          notify(`Withdrawn to your card: ${usd(amount)}`, `From ${name}. Stripe test refund: no real money moves.`);
+          notify(`Withdrawn to your card: ${usd(amount)}`, `From ${name}.`);
         })
         .catch((err) => {
           if (isWalletGone(err)) return forgetWallet();
@@ -605,10 +737,17 @@ function Wallet({ state }: { state: AppState }) {
   const localIds = new Set(state.envelopes.map((e) => e.id.toLowerCase()));
   const others = summary
     ? Object.entries(summary.envelopes).filter(
-        ([envelopeId, w]) => !localIds.has(envelopeId) && (w.balance > 0 || w.autosave?.status === "active"),
+        ([envelopeId, w]) =>
+          envelopeId !== GENERAL_ENVELOPE_ID &&
+          !localIds.has(envelopeId) &&
+          (w.balance > 0 || w.autosave?.status === "active"),
       )
     : [];
-  const total = summary ? summary.total : totalSetAside(state.envelopes);
+  const total = summary ? summary.total : walletTotal(state);
+  const generalWallet = summary?.envelopes[GENERAL_ENVELOPE_ID];
+  const generalBalance = generalWallet ? generalWallet.balance : (state.walletGeneral ?? 0);
+  // The general balance: always with Premium (it's where "Add money" lives), otherwise only while it holds money.
+  const showGeneral = walletLive && (premium || generalBalance > 0);
   const goals = state.envelopes.reduce((sum, e) => sum + e.target, 0);
   const autosaveOn = (envelopeId: string) => summary?.envelopes[envelopeId.toLowerCase()]?.autosave?.status === "active";
   const cardMode: CardMode = !walletLive ? "readonly" : premium ? "full" : "withdraw";
@@ -634,8 +773,8 @@ function Wallet({ state }: { state: AppState }) {
           ) : null}
         </div>
         <p className="lead muted">
-          An envelope for each goal. Add money by card, save a set amount every week automatically, and withdraw to your
-          card anytime.
+          Add money by card, keep an envelope for each goal, and save a set amount every week automatically. Withdraw to
+          your card anytime.
         </p>
       </header>
 
@@ -649,13 +788,7 @@ function Wallet({ state }: { state: AppState }) {
         ) : live === "off" ? (
           <Notice label="Wallet">The wallet isn&rsquo;t connected on this deployment yet, so money can&rsquo;t be added.</Notice>
         ) : (
-          <div className={styles.notes} role="note">
-            <span className="tag">Test mode</span>
-            <div>
-              <p>Stripe test mode: no real money moves. Test card 4242 4242 4242 4242, any future date, any CVC.</p>
-              <p className={ui.meta}>Your wallet is linked to this browser (no account).</p>
-            </div>
-          </div>
+          <p className={ui.meta}>Your wallet is linked to this browser, no account needed.</p>
         )}
         {walletLive && pendingSession && !token ? (
           <Notice tone="error">This payment was made from another browser&rsquo;s wallet, so it can&rsquo;t be shown here.</Notice>
@@ -682,22 +815,27 @@ function Wallet({ state }: { state: AppState }) {
       {!premium ? (
         <PremiumGate
           title="The wallet is Premium"
-          description="Keep an envelope for each goal in your Livento wallet: add money by card, save automatically every week, and withdraw to your card anytime. Stripe test mode: no real money moves."
+          description="Add money to your Livento wallet by card, keep an envelope for each goal, save automatically every week, and withdraw to your card anytime."
         />
       ) : null}
 
       {showList ? (
         <div className={`${styles.list} ${!premium ? styles.listAfterGate : ""}`}>
-          {!premium && shownEnvelopes.length ? (
+          {!premium && (shownEnvelopes.length || showGeneral) ? (
             <h2 className={ui.smallTitle}>Money in your wallet</h2>
+          ) : null}
+          {showGeneral ? (
+            <GeneralCard wallet={generalWallet} fallbackBalance={generalBalance} canAdd={premium} actions={actions} />
           ) : null}
           {premium && state.envelopes.length === 0 ? (
             <div className={ui.outline}>
-              <h2 className={ui.smallTitle}>No envelopes yet</h2>
+              <h2 className={ui.smallTitle}>No goals yet</h2>
               <p className={styles.emptyText}>
-                Open any event, check its full cost, then choose &ldquo;Create envelope&rdquo; in the Plan it section.
+                {walletLive
+                  ? "Add money now, or pick an event and tap Save for it to save toward a goal."
+                  : "Pick an event and tap Save for it to save toward a goal."}
               </p>
-              <Link href="/discover" className="pill small">
+              <Link href="/discover" className="pill">
                 Find an event <span aria-hidden="true">↗</span>
               </Link>
             </div>
@@ -725,7 +863,7 @@ export function EnvelopesView() {
   const hydrated = useHydrated();
   if (!hydrated) return <PageSkeleton label="Loading your wallet…" />;
   if (!state.profile && state.envelopes.length === 0 && !state.wallet) {
-    return <NoProfile text="Set up a quick profile (or use the sample), pick an event, and create an envelope from its cost plan." />;
+    return <NoProfile text="Set up a quick profile (or use the sample), then pick an event and tap Save for it." />;
   }
   return <Wallet state={state} />;
 }

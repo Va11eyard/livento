@@ -21,7 +21,7 @@ const FREE_FEATURES = [
   "Events near you: concerts, theatre, sports, family and big experiences",
   "Top 8 picks with a one-line reason for each",
   "The full cost of any event, every estimate labeled",
-  "Alerts for new matches by email or Telegram",
+  "Alerts for new matches on Telegram",
 ];
 
 /** /pricing — Free vs Premium, test-mode checkout, demo unlock, one-click cancel. */
@@ -134,7 +134,7 @@ export function PricingView() {
       try {
         const res = await checkoutSession({ sessionId: state.premiumSession, action: "cancel" });
         if (!res.ok || !res.canceled) {
-          setTurnOffError(res.message || "We couldn't cancel the test subscription, so Premium stays on. Please try again.");
+          setTurnOffError(res.message || "We couldn't cancel the subscription, so Premium stays on. Please try again.");
           return false;
         }
       } catch (err) {
@@ -171,7 +171,7 @@ export function PricingView() {
         ) : null}
         {arrival === "success" ? (
           <Notice tone="ok" label="Premium unlocked">
-            Thanks for trying it. This is test mode, so no real money was charged.
+            Thanks! Your wallet and planning tools are ready.
           </Notice>
         ) : null}
         {arrival === "cancel" ? (
@@ -186,8 +186,8 @@ export function PricingView() {
           <div className={styles.status}>
             <p>
               <span className="tag premium">Premium</span>{" "}
-              {premium === "demo" ? "is on as a free demo unlock." : "is on (test mode)."} Turning it off takes one
-              click and nothing renews.
+              {premium === "demo" ? "is on as a free demo unlock." : "is on."} Turning it off takes one click and
+              nothing renews.
             </p>
             <GoodbyeDialog onTurnOff={turnOff} error={turnOffError} />
           </div>
@@ -218,7 +218,6 @@ export function PricingView() {
         <section className={`${styles.plan} ${styles.premiumPlan}`} aria-labelledby="plan-premium">
           <div className={styles.planTop}>
             <p className={styles.planKicker}>Premium</p>
-            <span className="tag">Test price</span>
           </div>
           <h2 id="plan-premium" className={styles.planTitle}>
             Plan it, save for it, go
@@ -256,7 +255,7 @@ export function PricingView() {
           <div className={styles.planActions}>
             {checkoutLive ? (
               <button type="button" className="pill" onClick={() => void upgrade()} disabled={pending}>
-                {pending ? "Opening checkout…" : `Upgrade for ${usd(price)} (test checkout)`} <span aria-hidden="true">↗</span>
+                {pending ? "Opening checkout…" : `Upgrade for ${usd(price)}`} <span aria-hidden="true">↗</span>
               </button>
             ) : null}
             <button
@@ -269,10 +268,8 @@ export function PricingView() {
             </button>
           </div>
           <p className={styles.fine}>
-            Cancel anytime in one click. No hidden renewals.{" "}
-            {checkoutLive
-              ? "Test mode: no real card is charged."
-              : "Payments aren't connected in this demo, so Premium unlocks for free."}
+            Cancel anytime in one click. No hidden renewals.
+            {checkoutLive ? "" : " Payments aren't connected in this demo, so Premium unlocks for free."}
           </p>
         </section>
       </div>
@@ -284,23 +281,20 @@ export function PricingView() {
         <dl className={styles.facts}>
           <div>
             <dt>What you pay</dt>
-            <dd>The price above, shown before checkout. This demo runs in test mode, so no real money moves.</dd>
+            <dd>The price above, shown before checkout.</dd>
           </div>
           <div>
             <dt>Cancelling</dt>
             <dd>
-              One click on this page turns Premium off and cancels the test subscription, so nothing renews behind your
-              back.
+              One click on this page turns Premium off and cancels the subscription, so nothing renews behind your back.
             </dd>
           </div>
           <div>
             <dt>Your money</dt>
             <dd>
-              Money you add goes into your Livento wallet, one envelope per goal, and stays there until you withdraw
-              it back to your card.{" "}
-              {checkoutLive
-                ? "This demo runs the wallet in Stripe test mode, so no real money moves."
-                : "Payments aren't connected on this deployment yet, so the wallet can't take money."}
+              Money you add goes into your Livento wallet, on its own or in an envelope per goal, and stays there
+              until you withdraw it back to your card.
+              {checkoutLive ? "" : " Payments aren't connected on this deployment yet, so the wallet can't take money."}
             </dd>
           </div>
           <div>

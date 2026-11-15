@@ -11,7 +11,7 @@ import { useToast } from "@/components/app/Toast";
 import ui from "@/components/app/ui.module.css";
 import { errorMessage, getHealth, subscribeAlerts } from "@/lib/client-api";
 import { isoDatePart, todayISO } from "@/lib/dates";
-import { envelopeBalance, socialOf, totalSetAside, useAppState, useHydrated, useProfileMedia } from "@/lib/storage";
+import { envelopeBalance, socialOf, useAppState, useHydrated, useProfileMedia, walletTotal } from "@/lib/storage";
 import type { AppState, Profile } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import { EditProfileDialog } from "./EditProfileDialog";
@@ -184,7 +184,7 @@ function ProfileScreen({ state, profile }: { state: AppState; profile: Profile }
               <strong>{goals.length}</strong> {goals.length === 1 ? "goal" : "goals"}
             </li>
             <li>
-              <strong>{usd(totalSetAside(state.envelopes))}</strong> in wallet (test mode)
+              <strong>{usd(walletTotal(state))}</strong> in wallet
             </li>
             <li>
               <strong>{savedCount}</strong> saved
@@ -201,7 +201,7 @@ function ProfileScreen({ state, profile }: { state: AppState; profile: Profile }
           <h2 id={`${id}-goals`} className={`kicker ${styles.label}`}>
             02 / Saving for
           </h2>
-          <p className={`${ui.meta} ${styles.sectionNote}`}>Livento wallet balances. Stripe test mode: no real money moves.</p>
+          <p className={`${ui.meta} ${styles.sectionNote}`}>What&rsquo;s in your Livento wallet for each goal.</p>
           {goals.length ? (
             <ul className={styles.list}>
               {goals.map((env) => (
@@ -224,7 +224,7 @@ function ProfileScreen({ state, profile }: { state: AppState; profile: Profile }
               <Link href="/discover" className={ui.inlineLink}>
                 Discover
               </Link>{" "}
-              and create an envelope from its cost plan.
+              and tap Save for it.
             </p>
           )}
         </section>

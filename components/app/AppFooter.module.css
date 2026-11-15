@@ -41,6 +41,16 @@
   text-underline-offset: 4px;
 }
 
+.credits {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.credits a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .clear {
   border: 0;
   padding: 0;

@@ -78,17 +78,6 @@ export function EventCard({
         <div className={styles.topline}>
           <span>{categoryLabel(event.category)}</span>
           {event.source === "sample" ? <span className="tag sample">Sample data</span> : null}
-          {event.source === "curated" ? <span className="tag">Curated</span> : null}
-          {event.source === "thesportsdb" ? (
-            <span className="tag" title="Event data: TheSportsDB">
-              TheSportsDB
-            </span>
-          ) : null}
-          {event.source === "web" ? (
-            <span className="tag" title={event.attribution || "Found by AI web search"}>
-              Web
-            </span>
-          ) : null}
           {liked ? <span className={styles.likedMark}>Liked</span> : null}
         </div>
 
@@ -120,10 +109,6 @@ export function EventCard({
               <li key={reason}>{reason}</li>
             ))}
           </ul>
-        ) : null}
-
-        {event.source === "ticketmaster" ? (
-          <p className={styles.attribution}>{event.attribution || "Event data: Ticketmaster"}</p>
         ) : null}
 
         <div className={styles.actions}>

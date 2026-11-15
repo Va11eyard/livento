@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
   try {
     const customer = await stripeApi<StripeCustomer>("POST", "/v1/customers", {
-      description: "Livento wallet (test mode, no account)",
+      description: "Livento wallet (no account)",
       metadata: { app: "livento" },
     });
     return json<WalletCreateResponse>({ token: walletToken(customer.id) });

@@ -11,7 +11,7 @@
   letter-spacing: 0.04em;
 }
 
-/* Test-mode lines, wallet notices ------------------------------------------- */
+/* Wallet notices ------------------------------------------------------------- */
 
 .status {
   display: grid;
@@ -20,23 +20,6 @@
 }
 .status:empty {
   display: none;
-}
-
-.notes {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 10px 14px;
-  padding: 14px 18px;
-  border: 1px dashed var(--ink);
-  border-radius: 12px;
-  background: #fff;
-  font-size: 15px;
-}
-.notes > div {
-  display: grid;
-  flex: 1 1 260px;
-  gap: 2px;
 }
 
 /* List + cards --------------------------------------------------------------- */
@@ -60,6 +43,25 @@
   padding: clamp(20px, 3vw, 32px);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+/* General balance ("Add money"): outlined in ink so it reads first, above the goals. */
+.addCard {
+  border: 1px solid var(--ink);
+  background: #fff;
+}
+
+.addBalance {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
+.addBalance strong {
+  font: 650 clamp(22px, 2.4vw, 30px) / 1 var(--font-ui);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
 }
 
 .cardHead {

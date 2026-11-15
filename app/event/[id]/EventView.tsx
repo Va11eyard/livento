@@ -28,6 +28,7 @@ import ui from "@/components/app/ui.module.css";
 import { logInteraction } from "@/lib/client-api";
 import { compareSpendVsSave } from "@/lib/compare";
 import { buildPlan, eventDistanceMiles } from "@/lib/cost";
+import { isLatLng } from "@/lib/geo";
 import {
   addEnvelope,
   envelopeBalance,
@@ -36,10 +37,10 @@ import {
   hasPremium,
   likeEvent,
   saveEvent,
-  totalSetAside,
   unlikeEvent,
   useAppState,
   useHydrated,
+  walletTotal,
   weeklyContribution,
 } from "@/lib/storage";
 import type { AppState, ComparatorEvent, CostOverrides, Envelope, LiventoEvent, PlanResult, Profile } from "@/lib/types";
@@ -54,6 +55,28 @@ function byDate(a: LiventoEvent, b: LiventoEvent): number {
 
 function comparatorSide(name: string, plan: PlanResult): ComparatorEvent {
   return { name, cost: plan.total, deadline: plan.deadlineKind === "none" ? undefined : plan.deadline };
+}
+
+/**
+ * Google Maps links for the venue (no API key): the embed, "Open in Google Maps" and a
+ * hotel search nearby. Venue + city + state when there's a venue, else the event's
+ * coordinates, else the city. None for sample events (fictional places).
+ */
+function mapLinks(event: LiventoEvent): { label: string; embed: string; open: string; hotels: string } | null {
+  if (event.source === "sample") return null;
+  const place = eventPlace(event);
+  const text = [event.venue, place].filter(Boolean).join(", ");
+  const coords = isLatLng(event) ? `${event.lat},${event.lng}` : "";
+  const query = event.venue && place ? text : coords || text;
+  if (!query) return null;
+  const near = [event.venue, event.city].filter(Boolean).join(", ") || query;
+  return {
+    label: text || query,
+    // hl=en: the page is English; otherwise Google labels the map in the visitor's IP language.
+    embed: `https://www.google.com/maps?${new URLSearchParams({ q: query, hl: "en", output: "embed" })}`,
+    open: `https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query })}`,
+    hotels: `https://www.google.com/travel/hotels?${new URLSearchParams({ q: `hotels near ${near}` })}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -83,8 +106,8 @@ function SavingsPlan({
     saveEvent(event);
     logInteraction({ anonId: getAppState().anonId, eventId: event.id, action: "save" });
     notify(
-      envelope ? "Envelope updated" : "Envelope created",
-      envelope ? `New target: ${usd0(plan.total)}.` : "Add money to it by card in your wallet.",
+      envelope ? "Goal updated" : `Saving for ${event.name}`,
+      envelope ? `New target: ${usd0(plan.total)}.` : "Next: add money or turn on auto-save in your wallet.",
     );
   };
 
@@ -113,7 +136,7 @@ function SavingsPlan({
         <>
           <EnvelopeBar balance={balance} target={envelope.target} label={`In your wallet for ${event.name}`} />
           <div className={ui.actions}>
-            <Link href="/envelopes" className="pill small">
+            <Link href="/envelopes" className="pill">
               Add money in your wallet <span aria-hidden="true">↗</span>
             </Link>
             {Math.round(envelope.target) !== Math.round(plan.total) ? (
@@ -122,15 +145,18 @@ function SavingsPlan({
               </button>
             ) : null}
           </div>
+          <p className="help">Add money by card or turn on auto-save there. Withdraw to your card anytime.</p>
         </>
       ) : (
-        <div className={ui.actions}>
-          <button type="button" className="pill" onClick={save}>
-            Create envelope for {usd0(plan.total)} <span aria-hidden="true">↗</span>
-          </button>
-        </div>
+        <>
+          <div className={ui.actions}>
+            <button type="button" className="pill" onClick={save}>
+              Save for it · {usd0(plan.total)} <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+          <p className="help">Adds this goal to your Livento wallet. Then add money or turn on auto-save.</p>
+        </>
       )}
-      <p className="help">The money goes into your Livento wallet. Stripe test mode: no real money moves.</p>
     </div>
   );
 }
@@ -180,7 +206,7 @@ function CompareSection({
   const mineFirst =
     mine.cost < theirs.cost || (mine.cost === theirs.cost && (mine.deadline ?? "9999") <= (theirs.deadline ?? "9999"));
   const [a, b] = mineFirst ? [mine, theirs] : [theirs, mine];
-  const balance = totalSetAside(state.envelopes);
+  const balance = walletTotal(state);
   const weekly = weeklyContribution(profile);
   const result = compareSpendVsSave({ balance, weeklyContribution: weekly, eventA: a, eventB: b });
 
@@ -222,8 +248,8 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
   const distance = distanceText(eventDistanceMiles(event, profile));
   const price = priceInfo(event);
   const ticketUrl = event.source === "sample" ? undefined : safeExternalUrl(event.url);
-  const webHost = event.source === "web" && ticketUrl ? new URL(ticketUrl).hostname.replace(/^www\./, "") : undefined;
   const where = [event.venue, eventPlace(event)].filter(Boolean).join(", ");
+  const map = mapLinks(event);
 
   const toggleLike = () => {
     if (liked) {
@@ -265,7 +291,17 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
             {where ? (
               <div>
                 <dt>Where</dt>
-                <dd>{where}</dd>
+                <dd>
+                  {where}
+                  {map ? (
+                    <>
+                      {" · "}
+                      <a href="#map-title" className={ui.inlineLink}>
+                        See map
+                      </a>
+                    </>
+                  ) : null}
+                </dd>
               </div>
             ) : null}
             {distance ? (
@@ -289,9 +325,6 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
           </dl>
           <div className={styles.tagRow}>
             {event.source === "sample" ? <span className="tag sample">Sample data</span> : null}
-            {event.source === "curated" ? <span className="tag">Curated</span> : null}
-            {event.source === "thesportsdb" ? <span className="tag">TheSportsDB</span> : null}
-            {event.source === "web" ? <span className="tag">Web</span> : null}
             {event.priceNote ? <span className={ui.meta}>{event.priceNote}</span> : null}
           </div>
           <div className={ui.actions}>
@@ -313,27 +346,6 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
               {liked ? "Liked ✓" : "Like"}
             </button>
           </div>
-          {event.source === "ticketmaster" ? (
-            <p className={styles.attribution}>{event.attribution || "Event data: Ticketmaster"}</p>
-          ) : null}
-          {event.source === "thesportsdb" ? (
-            <p className={styles.attribution}>
-              Event data:{" "}
-              <a href="https://www.thesportsdb.com" target="_blank" rel="noopener noreferrer">
-                TheSportsDB<span className="sr-only"> (opens in a new tab)</span>
-              </a>
-            </p>
-          ) : null}
-          {webHost ? (
-            <p className={styles.attribution}>
-              Found by AI web search ·{" "}
-              <a href={`https://${webHost}`} target="_blank" rel="noopener noreferrer">
-                {webHost}
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
-              . Check dates and prices on the official page.
-            </p>
-          ) : null}
         </div>
       </header>
 
@@ -375,6 +387,32 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
         <p className={ui.meta}>Times are shown in your time zone. Always confirm on the official ticket page.</p>
       </section>
 
+      {map ? (
+        <section className={ui.blockRule} aria-labelledby="map-title">
+          <div className={ui.sectionHead}>
+            <h2 id="map-title" className={ui.sectionTitle}>
+              Map
+            </h2>
+            {where ? <span className={ui.meta}>{where}</span> : null}
+          </div>
+          <iframe
+            className={styles.map}
+            src={map.embed}
+            title={`Map of ${map.label}`}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+          <div className={ui.actions}>
+            <a className="pill small" href={map.open} target="_blank" rel="noopener noreferrer">
+              Open in Google Maps<span className="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>
+            </a>
+            <a className="pill small alt" href={map.hotels} target="_blank" rel="noopener noreferrer">
+              Hotels nearby<span className="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </section>
+      ) : null}
+
       <section className={ui.blockRule} aria-labelledby="cost-title">
         <div className={ui.sectionHead}>
           <h2 id="cost-title" className={ui.sectionTitle}>
@@ -410,8 +448,8 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
                 <p className={styles.panelKicker}>Trip roadmap</p>
                 <h3 className={ui.smallTitle}>Dated steps from today to the day of</h3>
                 <p>
-                  When to request time off, presale reminders, travel and hotel links with your dates, and a day-of
-                  checklist.
+                  When to save and buy tickets, and a day-of checklist. Trips out of town also get time off, travel and
+                  hotel links for your dates.
                 </p>
                 <div className={ui.actions}>
                   <Link href={roadmapHref(event.id)} className="pill">

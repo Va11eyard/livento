@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       return json<CheckoutSessionResponse>({ ok: true, canceled: true });
     }
     console.warn(`[checkout/session] cancel failed: Stripe HTTP ${del.status}`);
-    return apiError("We couldn't cancel the test subscription right now. Please try again.", 502);
+    return apiError("We couldn't cancel the subscription right now. Please try again.", 502);
   } catch {
     console.warn("[checkout/session] Stripe request failed");
     return apiError("Checkout is unavailable right now. Please try again.", 502);
