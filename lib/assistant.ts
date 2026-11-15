@@ -128,7 +128,8 @@ function classify(err: unknown): AssistantErrorKind {
 }
 
 function describeError(err: unknown): string {
-  if (err instanceof Anthropic.APIError) return `${err.name} ${err.status ?? ""}`.trim();
+  // The API's own message (never contains the key) says which field it rejected.
+  if (err instanceof Anthropic.APIError) return `${err.name} ${err.status ?? ""} ${String(err.message).slice(0, 400)}`.trim();
   if (err instanceof Error) return err.name;
   return "unknown error";
 }
