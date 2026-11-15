@@ -30,6 +30,21 @@ export function geminiModel(): string {
   return raw && /^[a-z0-9][a-z0-9.-]{1,80}$/i.test(raw) ? raw : GEMINI_DEFAULT_MODEL;
 }
 
+/**
+ * Free-tier quotas are per model and small (e.g. 20 requests a day), so when one model is out of
+ * quota, unknown or hangs, the next one answers. Tried in order; a model that failed that way is
+ * skipped on this instance for an hour (a day when it doesn't exist).
+ */
+const FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"];
+const benched = new Map<string, number>(); // model -> skip until (ms)
+
+function modelOrder(): string[] {
+  const now = Date.now();
+  const all = [...new Set([geminiModel(), ...FALLBACK_MODELS])];
+  const ready = all.filter((m) => (benched.get(m) ?? 0) <= now);
+  return ready.length ? ready : all;
+}
+
 function baseUrl(): string {
   const raw = process.env.GEMINI_API_BASE?.trim();
   if (!raw) return DEFAULT_BASE;
@@ -145,43 +160,57 @@ export async function generateContent(
   const signal = opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline;
   const redact = (s: string) => s.split(key).join("[redacted]").slice(0, 400);
 
-  let res: Response;
-  let text: string;
-  try {
-    res = await fetch(`${baseUrl()}/v1beta/models/${encodeURIComponent(geminiModel())}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify(body),
-      signal,
-      cache: "no-store",
-    });
-    text = await res.text();
-  } catch {
-    if (signal.aborted) throw new GeminiError("timeout", "The Gemini request timed out or was cancelled");
-    throw new GeminiError("network", "Could not reach the Gemini API");
-  }
-
-  if (!res.ok) {
-    let apiStatus = "";
-    let apiMessage = "";
+  let last: GeminiError | undefined;
+  for (const model of modelOrder()) {
+    if (signal.aborted) break;
+    // A hanging model must not use up the whole deadline: each attempt gets at most 12 s.
+    const attempt = AbortSignal.any([signal, AbortSignal.timeout(12_000)]);
+    let res: Response;
+    let text: string;
     try {
-      const error = (JSON.parse(text) as { error?: { status?: unknown; message?: unknown } }).error;
-      apiStatus = typeof error?.status === "string" ? error.status : "";
-      apiMessage = typeof error?.message === "string" ? error.message : "";
+      res = await fetch(`${baseUrl()}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(body),
+        signal: attempt,
+        cache: "no-store",
+      });
+      text = await res.text();
     } catch {
-      // not JSON
+      if (signal.aborted) throw new GeminiError("timeout", "The Gemini request timed out or was cancelled");
+      if (attempt.aborted) {
+        benched.set(model, Date.now() + 3_600_000);
+        last = new GeminiError("timeout", `${model} timed out`);
+        continue;
+      }
+      throw new GeminiError("network", "Could not reach the Gemini API");
     }
-    throw new GeminiError(
-      kindFor(res.status, apiStatus, apiMessage),
-      redact(`${res.status} ${apiStatus} ${apiMessage}`.trim()),
-      res.status,
-    );
+
+    if (!res.ok) {
+      let apiStatus = "";
+      let apiMessage = "";
+      try {
+        const error = (JSON.parse(text) as { error?: { status?: unknown; message?: unknown } }).error;
+        apiStatus = typeof error?.status === "string" ? error.status : "";
+        apiMessage = typeof error?.message === "string" ? error.message : "";
+      } catch {
+        // not JSON
+      }
+      const kind = kindFor(res.status, apiStatus, apiMessage);
+      last = new GeminiError(kind, redact(`${model}: ${res.status} ${apiStatus} ${apiMessage}`.trim()), res.status);
+      if (kind === "rate_limit" || kind === "not_found" || kind === "server") {
+        benched.set(model, Date.now() + (kind === "not_found" ? 86_400_000 : 3_600_000));
+        continue; // try the next model
+      }
+      throw last;
+    }
+    try {
+      return JSON.parse(text) as GeminiResponse;
+    } catch {
+      throw new GeminiError("bad_response", "Gemini returned a response that isn't JSON");
+    }
   }
-  try {
-    return JSON.parse(text) as GeminiResponse;
-  } catch {
-    throw new GeminiError("bad_response", "Gemini returned a response that isn't JSON");
-  }
+  throw last ?? new GeminiError("timeout", "The Gemini request timed out or was cancelled");
 }
 
 /** The answer text of the first candidate (thought summaries skipped). */

@@ -151,9 +151,10 @@ async function structuredCall<S extends z.ZodType>(call: StructuredCall<S>): Pro
       }
     }
   }
-  if (!geminiConfigured()) return null;
-  const { label, schema, system, user, maxTokens, timeoutMs, effort } = call;
-  return geminiStructured({ label, schema, system, user, maxTokens, timeoutMs, effort, signal });
+  // Background wording (picks, roadmap, merchant categories) never falls back to Gemini: its free
+  // quota is tiny and is kept for Ask Livento and quotes. These features have rule-based fallbacks.
+  void geminiStructured;
+  return null;
 }
 
 /** The Claude request; throws on API errors. */
