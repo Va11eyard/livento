@@ -171,11 +171,12 @@ function ticketLabel(e: LiventoEvent): string {
   return e.source === "ticketmaster" ? "Tickets on Ticketmaster" : "Official site";
 }
 
-/** "Ticketmaster, TheSportsDB": data sources the providers' terms ask us to credit; "" when none. */
+/** "Ticketmaster, TheSportsDB, AI web search": where the listed events came from; "" when none. */
 function dataCredits(events: LiventoEvent[]): string {
   return [
     events.some((e) => e.source === "ticketmaster") ? "Ticketmaster" : "",
     events.some((e) => e.source === "thesportsdb") ? "TheSportsDB" : "",
+    events.some((e) => e.source === "web") ? "AI web search (check each official page)" : "",
   ]
     .filter(Boolean)
     .join(", ");

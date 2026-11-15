@@ -34,7 +34,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   experiences: "Big experiences",
 };
 
-export type EventSource = "ticketmaster" | "thesportsdb" | "curated" | "sample";
+export type EventSource = "ticketmaster" | "thesportsdb" | "curated" | "sample" | "web";
 
 export interface Presale {
   name: string;
@@ -44,7 +44,7 @@ export interface Presale {
 
 /** One thing a user can go to. Named LiventoEvent to avoid clashing with DOM `Event`. */
 export interface LiventoEvent {
-  id: string; // stable, prefixed by source: "tm_<id>", "tsdb_<idEvent>", "cur_<slug>", "smp_<slug>"
+  id: string; // stable, prefixed by source: "tm_<id>", "tsdb_<idEvent>", "cur_<slug>", "smp_<slug>", "web_<hash>"
   source: EventSource;
   name: string;
   category: Category;
@@ -129,12 +129,22 @@ export interface AppState {
   wallet?: WalletLink; // Livento wallet linked to this browser (no account)
   insights?: InsightsSummary; // spending summary from /insights (never the raw file)
   social?: ProfileSocial; // name, bio, quote and cover for /profile (photos live under PROFILE_MEDIA_KEY)
+  telegram?: TelegramLink; // this browser's link to the user's chat with the Livento bot
 }
 
 /** The browser's link to its Livento wallet: "<cus id>.<HMAC>", sent only in POST bodies. */
 export interface WalletLink {
   token: string;
   createdAt: string; // ISO datetime
+}
+
+/** The browser's link to its Telegram chat with the bot: "<chat id>.<HMAC>", sent only in POST bodies. */
+export interface TelegramLink {
+  token: string;
+  name?: string; // Telegram first name
+  username?: string; // without the @
+  bot?: string; // the bot's username (for "Open chat"), from POST /api/telegram/link
+  linkedAt: string; // ISO datetime
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +257,20 @@ export interface EventsResponse {
   events: LiventoEvent[];
   source: "ticketmaster" | "sample" | "mixed"; // "sample" when no key / upstream failure
   notice?: string; // human-readable note shown when falling back
+  /**
+   * Events found by AI web search (source "web"): "cached" = already included,
+   * "pending" = some interests aren't searched yet, call GET /api/events/web,
+   * "off" (or absent) = not used (AI off, Ticketmaster live, or nothing to search).
+   */
+  webSearch?: WebSearchState;
+}
+
+export type WebSearchState = "cached" | "pending" | "off";
+
+// GET /api/events/web?<same params as /api/events> — runs the AI web search for
+// interests not searched yet (or reads the stored results). Up to ~60 s.
+export interface WebEventsResponse {
+  events: LiventoEvent[]; // source "web" only, upcoming, matching the query
 }
 
 // POST /api/recommend
@@ -344,6 +368,26 @@ export interface AlertSubscribeResponse {
   id?: string;
   message?: string; // shown to the user (e.g. "Alerts are not configured on this deployment")
   telegramStartUrl?: string; // https://t.me/<bot>?start=<id>
+  linkId?: string; // with storage: poll POST /api/telegram/link { action: "status", linkId } until linked
+}
+
+// POST /api/telegram/link  (the site ↔ Telegram chat link; 503 when the bot isn't configured)
+export type TelegramLinkAction = "link" | "picks" | "unlink" | "status";
+export interface TelegramLinkRequest {
+  action: TelegramLinkAction;
+  token?: string; // link (from ?tg_link=), picks, unlink
+  initData?: string; // link from inside the Telegram Mini App (instead of token)
+  linkId?: string; // status
+  profile?: { city: string; stateCode?: string; interests: Category[] }; // picks: the site profile
+}
+export interface TelegramLinkResponse {
+  ok: boolean;
+  status?: "pending" | "linked" | "expired"; // action "status"
+  token?: string; // link, and status "linked"
+  name?: string;
+  username?: string;
+  bot?: string; // the bot's username
+  message?: string; // a short sentence for the user (always set when ok is false)
 }
 
 // POST /api/quote  (profile "About my goals")

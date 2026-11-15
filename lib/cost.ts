@@ -148,6 +148,15 @@ export function buildPlan(
       estimate: true,
       note: `Price not listed. ${each} is a rough estimate for an ${leagueEstimate.league} game, not a quoted price — enter the real price from the official site`,
     };
+  } else if (unitPrice === undefined && event.source === "web") {
+    // No made-up number: prices vary too much within a category for one estimate to help.
+    ticket = {
+      key: "ticket",
+      label: "Tickets (price not listed — enter it)",
+      amount: 0,
+      estimate: true,
+      note: "The page AI web search found doesn't list a price. Enter the real price from the official page",
+    };
   } else if (unitPrice === undefined) {
     ticket = {
       key: "ticket",
@@ -171,6 +180,8 @@ export function buildPlan(
       } else {
         note = "Only a top price is listed on Ticketmaster";
       }
+    } else if (event.source === "web") {
+      note = event.priceNote ?? "Price seen by AI web search — an estimate, check the official page";
     } else {
       note = event.priceNote ?? "Listed price on the official site — varies by date";
     }

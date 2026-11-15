@@ -5,6 +5,8 @@
  * Bot first: /start without a payload → welcome back + picks, or a two-step onboarding
  * (city buttons or typed city, then interest toggles) that ends with picks and "Open Livento".
  * Commands: /picks, /profile, /quote, /stop. Any other text → handleFreeText().
+ * Site link: /start replies and the /profile view carry "✓ Show on Livento" (lib/telegram-link);
+ * with storage, a "_<link id>" on the /start payload also tells the waiting site directly.
  */
 import { findCity, US_CITIES } from "./cities";
 import { escapeHtml, getAlert, parseStatelessStart, picksTelegram, saveAlert, sendTelegram, telegramCall } from "./alerts";
@@ -24,6 +26,7 @@ import {
   placeLabel,
   profileLine,
   saveChatProfile,
+  showOnLiventoButton,
   subscribeChat,
   targetFromPayload,
   type ChatId,
@@ -32,6 +35,7 @@ import {
   type TgInlineMarkup,
   type TgMessage,
 } from "./telegram";
+import { completePendingLink, splitStartArg } from "./telegram-link";
 import { encodeTgPayload, interestsMask, parseTgPayload, tgPayloadFor } from "./telegram-payload";
 import { CATEGORIES, CATEGORY_LABELS, type City } from "./types";
 
@@ -159,7 +163,7 @@ function interestsPickerText(city: City, onboarding: boolean): string {
     : `<b>Change interests</b>\n📍 ${where}\nTap to switch them on or off, then Done.`;
 }
 
-function profileView(profile: PickTarget & { payload: string | null }, site: string, excludeQuote?: number) {
+function profileView(chatId: ChatId, profile: PickTarget & { payload: string | null }, site: string, excludeQuote?: number) {
   const quote = randomQuote(excludeQuote);
   const text = [
     "<b>Your Livento profile</b>",
@@ -178,6 +182,7 @@ function profileView(profile: PickTarget & { payload: string | null }, site: str
     ],
     [{ text: "💬 New quote", callback_data: `${CB.profileQuote}:${quote.index}` }],
     [openLiventoButton(site, profile.payload)],
+    [showOnLiventoButton(site, chatId)],
   ]);
   return { text, reply_markup };
 }
@@ -205,21 +210,27 @@ async function show(chatId: ChatId, messageId: number | null, text: string, repl
 // Flows
 // ---------------------------------------------------------------------------
 
-/** Sends the current top picks (KV: skips what was already sent and remembers the new ones). */
-async function sendPicks(chatId: ChatId, target: PickTarget, site: string, intro?: string) {
+/**
+ * Sends the current top picks (KV: skips what was already sent and remembers the new ones).
+ * `withLink` adds "✓ Show on Livento" (after /start and onboarding). False when Telegram refused.
+ */
+async function sendPicks(chatId: ChatId, target: PickTarget, site: string, intro?: string, withLink = false): Promise<boolean> {
   // With KV, a profile always has a daily-alert subscription (e.g. after storage was added later).
   const rec = (await alertsForChat(chatId))[0] ?? (await subscribeChat(chatId, target));
   const picks = await topPicksFor(target, 3, rec?.sentIds ?? []);
   const payload = tgPayloadFor(target.city, target.stateCode, target.interests);
-  const reply_markup = keyboard([[openLiventoButton(site, payload)], [{ text: "⚙️ Your profile", callback_data: CB.profile }]]);
+  const reply_markup = keyboard([
+    [openLiventoButton(site, payload)],
+    withLink ? [showOnLiventoButton(site, chatId)] : [],
+    [{ text: "⚙️ Your profile", callback_data: CB.profile }],
+  ]);
   const lead = intro ? `${intro}\n\n` : "";
   if (picks.length === 0) {
-    await sendTelegram(
+    return sendTelegram(
       chatId,
       `${lead}No new upcoming events match ${escapeHtml(interestsText(target.interests).toLowerCase())} near ${escapeHtml(placeLabel(target))} right now. Try more interests in /profile.`,
       { reply_markup },
     );
-    return;
   }
   const footer = rec
     ? "You'll also get new matches here once a day. /picks for fresh picks · /stop to unsubscribe."
@@ -231,6 +242,7 @@ async function sendPicks(chatId: ChatId, target: PickTarget, site: string, intro
     rec.lastSentAt = new Date().toISOString();
     await saveAlert(rec);
   }
+  return sent;
 }
 
 async function startOnboarding(chatId: ChatId, site: string, messageId: number | null = null) {
@@ -240,7 +252,7 @@ async function startOnboarding(chatId: ChatId, site: string, messageId: number |
 async function sendProfileView(chatId: ChatId, site: string) {
   const profile = await getChatProfile(chatId);
   if (!profile) return startOnboarding(chatId, site);
-  const view = profileView(profile, site);
+  const view = profileView(chatId, profile, site);
   await sendTelegram(chatId, view.text, { reply_markup: view.reply_markup });
 }
 
@@ -255,7 +267,7 @@ async function chooseCity(chatId: ChatId, cityIndex: number, site: string, messa
   }
   const saved = await saveChatProfile(chatId, { ...profile, city: city.name, stateCode: city.state }, site);
   if (!saved) return "Couldn't save that. Please try again.";
-  const view = profileView(saved, site);
+  const view = profileView(chatId, saved, site);
   await show(chatId, messageId, view.text, view.reply_markup);
   return `Saved: ${city.name}, ${city.state}`;
 }
@@ -270,7 +282,7 @@ async function finishInterests(chatId: ChatId, payload: string, site: string, me
   const saved = await saveChatProfile(chatId, target, site, before ? undefined : (messageId ?? undefined));
   if (!saved) return "Couldn't save that. Please try again.";
   if (before) {
-    const view = profileView(saved, site);
+    const view = profileView(chatId, saved, site);
     await show(chatId, messageId, view.text, view.reply_markup);
     return "Saved";
   }
@@ -279,11 +291,15 @@ async function finishInterests(chatId: ChatId, payload: string, site: string, me
     target,
     site,
     "<b>You're all set.</b> Your profile is pinned at the top of this chat. Open Livento to finish it with your budget and favourites.",
+    true,
   );
   return "Profile saved";
 }
 
-async function startCommand(chatId: ChatId, arg: string, site: string) {
+async function startCommand(chatId: ChatId, rawArg: string, site: string, from?: TgMessage["from"]) {
+  // "<payload>_<link id>": the site is waiting for this chat (storage only); tell it first.
+  const { base: arg, linkId } = splitStartArg(rawArg);
+  if (linkId) await completePendingLink(linkId, chatId, { name: from?.first_name, username: from?.username });
   // Website → bot: the deep link carries the profile.
   const fromSite = parseStatelessStart(arg);
   if (fromSite) {
@@ -293,7 +309,7 @@ async function startCommand(chatId: ChatId, arg: string, site: string) {
       : saved.created
         ? "<b>Connected.</b> Your Livento profile is pinned at the top of this chat."
         : `<b>Profile updated:</b> ${escapeHtml(profileLine(fromSite))}`;
-    await sendPicks(chatId, fromSite, site, intro);
+    await sendPicks(chatId, fromSite, site, intro, true);
     return;
   }
   // A subscription created on the site (storage only).
@@ -302,12 +318,12 @@ async function startCommand(chatId: ChatId, arg: string, site: string) {
     stored.chatId = chatId;
     await saveAlert(stored);
     await saveChatProfile(chatId, stored, site);
-    await sendPicks(chatId, stored, site, "<b>Connected.</b> You'll get new matches here once a day.");
+    await sendPicks(chatId, stored, site, "<b>Connected.</b> You'll get new matches here once a day.", true);
     return;
   }
   // Bot first.
   const profile = await getChatProfile(chatId);
-  if (profile) await sendPicks(chatId, profile, site, `<b>Welcome back!</b> ${escapeHtml(profileLine(profile))}`);
+  if (profile) await sendPicks(chatId, profile, site, `<b>Welcome back!</b> ${escapeHtml(profileLine(profile))}`, true);
   else await startOnboarding(chatId, site);
 }
 
@@ -353,10 +369,12 @@ async function onMessage(msg: TgMessage, site: string) {
   const command = /^\/([a-z_]+)(?:@\w+)?(?:\s+([\s\S]*))?$/i.exec(text);
   switch (command?.[1].toLowerCase()) {
     case "start":
-      return startCommand(chatId, (command?.[2] ?? "").trim().split(/\s+/)[0] ?? "", site);
+      return startCommand(chatId, (command?.[2] ?? "").trim().split(/\s+/)[0] ?? "", site, msg.from);
     case "picks": {
       const profile = await getChatProfile(chatId);
-      return profile ? sendPicks(chatId, profile, site) : startOnboarding(chatId, site);
+      if (profile) await sendPicks(chatId, profile, site);
+      else await startOnboarding(chatId, site);
+      return;
     }
     case "profile":
       return sendProfileView(chatId, site);
@@ -457,7 +475,7 @@ async function onCallback(query: NonNullable<TelegramUpdate["callback_query"]>, 
       case CB.profileQuote: {
         const profile = await getChatProfile(chatId);
         if (!profile) return startOnboarding(chatId, site, messageId);
-        const view = profileView(profile, site, shownQuote(arg));
+        const view = profileView(chatId, profile, site, shownQuote(arg));
         await show(chatId, messageId, view.text, view.reply_markup);
         return;
       }
@@ -467,6 +485,27 @@ async function onCallback(query: NonNullable<TelegramUpdate["callback_query"]>, 
   } finally {
     await answer();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Actions from the website (app/api/telegram/link)
+// ---------------------------------------------------------------------------
+
+/** "Send my picks to Telegram": the site's profile, else the chat's saved one. */
+export async function sendPicksFromSite(
+  chatId: ChatId,
+  target: PickTarget | null,
+  site: string,
+): Promise<"sent" | "no-profile" | "failed"> {
+  const profile = target ?? (await getChatProfile(chatId));
+  if (!profile) return "no-profile";
+  return (await sendPicks(chatId, profile, site, "<b>Sent from Livento on the web.</b>")) ? "sent" : "failed";
+}
+
+/** "Disconnect" on the site: removes the pinned profile (and KV alerts) and says so in the chat. */
+export async function disconnectFromSite(chatId: ChatId): Promise<void> {
+  await clearChatProfile(chatId);
+  await sendTelegram(chatId, "Disconnected from Livento on the web. Send /start to connect again.");
 }
 
 /** Handles one webhook update. Errors are caught by the caller, which always answers 200. */

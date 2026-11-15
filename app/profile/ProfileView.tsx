@@ -6,6 +6,7 @@ import { EnvelopeBar } from "@/components/app/EnvelopeBar";
 import { eventHref } from "@/components/app/EventCard";
 import { categoryLabel, eventPlace, formatDate, formatMonth, formatTime, localDate, usd } from "@/components/app/format";
 import { NoProfile, PageSkeleton } from "@/components/app/States";
+import { watchTelegramLink } from "@/components/app/TelegramLinkCatcher";
 import { useToast } from "@/components/app/Toast";
 import ui from "@/components/app/ui.module.css";
 import { errorMessage, getHealth, subscribeAlerts } from "@/lib/client-api";
@@ -16,6 +17,7 @@ import { Avatar } from "./Avatar";
 import { EditProfileDialog } from "./EditProfileDialog";
 import { QuoteCard } from "./QuoteCard";
 import { coverSrc, safeTelegramUrl } from "./social";
+import { TelegramConnected } from "./TelegramConnected";
 import styles from "./profile.module.css";
 
 const MAX_PLANS = 8;
@@ -58,7 +60,11 @@ function interestsText(profile: Profile): string {
 
 type TelegramResult = { tone: "ok" | "info" | "error"; text: string; url?: string };
 
-/** "Connect Telegram": the same flow as Discover's alerts box, offered only when the bot is live. */
+/**
+ * "Connect Telegram": the same flow as Discover's alerts box, offered only when the bot is live.
+ * The site learns about the link from the bot's "✓ Show on Livento" button, or (with storage)
+ * by itself through the returned link id (components/app/TelegramLinkCatcher).
+ */
 function useTelegram(profile: Profile) {
   const [live, setLive] = useState(false);
   const [pending, setPending] = useState(false);
@@ -88,7 +94,14 @@ function useTelegram(profile: Profile) {
       if (url) {
         const win = window.open(url, "_blank");
         if (win) win.opener = null;
-        setResult({ tone: "ok", text: "One more step: press Start in Telegram to connect.", url });
+        if (res.linkId) watchTelegramLink(res.linkId);
+        setResult({
+          tone: "ok",
+          text: res.linkId
+            ? "Tap Start in Telegram. This page updates by itself, or tap “✓ Show on Livento” in the chat."
+            : "Tap Start in Telegram, then “✓ Show on Livento” to finish.",
+          url,
+        });
       } else {
         setResult({ tone: "info", text: res.message || "The Telegram bot isn't set up on this deployment yet." });
       }
@@ -270,7 +283,7 @@ function ProfileScreen({ state, profile }: { state: AppState; profile: Profile }
           <Link href="/onboarding" className="pill alt">
             Edit preferences <span aria-hidden="true">●</span>
           </Link>
-          {telegram.live ? (
+          {telegram.live && !state.telegram ? (
             <button
               type="button"
               className="pill alt"
@@ -282,8 +295,9 @@ function ProfileScreen({ state, profile }: { state: AppState; profile: Profile }
           ) : null}
         </div>
         <p className={ui.meta}>Preferences are your city, interests, budget and travel. Your photo, bio and quote stay as they are.</p>
+        {state.telegram ? <TelegramConnected telegram={state.telegram} profile={profile} /> : null}
         <div aria-live="polite">
-          {telegram.result ? (
+          {telegram.result && !state.telegram ? (
             <p className={telegram.result.tone === "error" ? ui.error : ui.status}>
               {telegram.result.text}{" "}
               {telegram.result.url ? (

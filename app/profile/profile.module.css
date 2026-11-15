@@ -241,6 +241,27 @@
   border-top: 1px solid var(--line);
 }
 
+/* Telegram connected (inside .more) */
+.telegram {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  margin-top: 8px;
+  padding: clamp(16px, 2.4vw, 22px);
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+
+.telegramStatus {
+  margin: 0;
+  font: 650 15px/1.35 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.telegramCheck {
+  color: var(--ok);
+}
+
 /* Edit dialog ------------------------------------------------------------------ */
 
 /* The fields scroll; Save/Cancel stay in view. [role] outranks ConfirmDialog's .content overflow. */

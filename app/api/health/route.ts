@@ -17,25 +17,30 @@ export async function GET(request: Request) {
 
   const stripeTest = stripeTestKey() !== null; // same rule as before: sk_test_ / rk_test_ only
 
+  const ticketmaster = hasTicketmasterKey();
   const integrations: IntegrationStatus[] = [
-    hasTicketmasterKey()
+    isLlmConfigured()
       ? {
           key: "events",
-          name: "Live events (Ticketmaster)",
+          name: "Live events (AI web search)",
           state: "live",
-          detail: "Discover loads real upcoming events near the user's city, cached for an hour.",
+          detail: ticketmaster
+            ? "Ticketmaster is connected and used first. When it's unavailable, Claude's web search finds real upcoming concerts, shows, comedy and festivals near the user, each linked to the page it came from."
+            : `Claude's web search finds real upcoming concerts, shows, comedy and festivals near the user, each linked to the page it came from; prices only when the page lists one. Results are saved per city (${isKvConfigured() ? "shared database" : "in memory"}) and the 15 largest cities refresh daily. A Ticketmaster key would add official prices and on-sale dates.`,
         }
       : {
           key: "events",
-          name: "Live events (Ticketmaster)",
-          state: "sample",
-          detail: "No API key: Discover shows labeled, fictional sample events plus curated experiences.",
+          name: "Live events (AI web search)",
+          state: ticketmaster ? "live" : "sample",
+          detail: ticketmaster
+            ? "No AI key: Ticketmaster listings only, and labeled sample events when it's unavailable."
+            : "No AI key: Discover shows labeled sample events when there are no real sports games nearby, plus curated experiences. A Ticketmaster key would add official prices and on-sale dates.",
         },
     {
       key: "sports",
       name: "Live sports (TheSportsDB)",
       state: "live",
-      detail: hasTicketmasterKey()
+      detail: ticketmaster
         ? "Backup for sports: real upcoming NBA, NFL, MLB, NHL and MLS games near the user when Ticketmaster is unavailable. Free public API; no prices, so ticket prices are labeled estimates."
         : "Real upcoming NBA, NFL, MLB, NHL and MLS games near the user. Free public API; no prices, so ticket prices are labeled estimates.",
     },
@@ -58,13 +63,15 @@ export async function GET(request: Request) {
           key: "storage",
           name: "Storage (Redis)",
           state: "live",
-          detail: "Alert subscriptions, the event cache and rate limits persist across server instances.",
+          detail:
+            "Alert subscriptions, the shared database of events found by web search, the event cache and rate limits persist across server instances.",
         }
       : {
           key: "storage",
           name: "Storage (Redis)",
           state: "off",
-          detail: "In-memory only: alert sign-ups are disabled and the cache resets between instances.",
+          detail:
+            "In-memory only: alert sign-ups are disabled, and events found by web search and the cache reset between instances.",
         },
     telegramConfigured()
       ? {
@@ -124,15 +131,16 @@ export async function GET(request: Request) {
     process.env.CRON_SECRET?.trim()
       ? {
           key: "cron",
-          name: "Daily alert job",
+          name: "Daily jobs",
           state: "live",
-          detail: "Runs every day at 15:00 UTC and sends new matches to subscribers.",
+          detail:
+            "Every day: refreshes web-search events for the 15 largest cities at 13:00 UTC and sends new matches to subscribers at 15:00 UTC.",
         }
       : {
           key: "cron",
-          name: "Daily alert job",
+          name: "Daily jobs",
           state: "off",
-          detail: "CRON_SECRET not set, so the scheduled job is refused.",
+          detail: "CRON_SECRET not set, so the scheduled event refresh and alert jobs are refused.",
         },
   ];
 

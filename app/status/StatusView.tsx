@@ -78,16 +78,24 @@ export function StatusView() {
     try {
       let t = performance.now();
       const events = await getEvents(eventsQueryFromProfile(profile));
-      const source =
-        events.source === "ticketmaster"
-          ? "Ticketmaster (live)"
-          : events.source === "mixed"
-            ? "live data + curated/sample"
-            : "sample data";
+      const sources = (
+        [
+          ["ticketmaster", "Ticketmaster"],
+          ["thesportsdb", "TheSportsDB"],
+          ["web", "AI web search"],
+          ["curated", "curated"],
+          ["sample", "sample"],
+        ] as const
+      )
+        .map(([key, label]) => ({ label, n: events.events.filter((e) => e.source === key).length }))
+        .filter((s) => s.n > 0)
+        .map((s) => `${s.n} ${s.label}`)
+        .join(", ");
+      const webNote = events.webSearch === "pending" ? " · AI web search adds more when Discover opens" : "";
       push({
         step: "Events",
         ok: events.events.length > 0,
-        result: `${events.events.length} events near ${profile.city} · source: ${source}`,
+        result: `${events.events.length} events near ${profile.city} · ${sources || "none"}${webNote}`,
         ms: since(t),
       });
       if (!events.events.length) return;

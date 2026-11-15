@@ -1,8 +1,11 @@
 /**
- * Event catalogue (server-only): live Ticketmaster events when a key is set,
- * otherwise labeled sample events plus real upcoming sports games from
- * TheSportsDB (free, keyless); plus the curated big-experiences list.
- * Shared by GET /api/events and the daily alerts job.
+ * Event catalogue (server-only): live Ticketmaster events when a key is set and
+ * answering; otherwise real upcoming sports games from TheSportsDB (free,
+ * keyless) plus real events found by AI web search (lib/webEvents, stored per
+ * city), and labeled sample events only when neither has anything; plus the
+ * curated big-experiences list. Shared by GET /api/events, the assistant and
+ * the daily alerts job. Never runs a web search itself: it reads stored
+ * results and reports `webSearch: "pending"` so Discover can ask for one.
  */
 import experiencesJson from "@/data/experiences.json";
 import sampleEventsJson from "@/data/sample-events.json";
@@ -11,24 +14,33 @@ import { addDays, isoDatePart, todayISO } from "./dates";
 import { distanceMiles, isLatLng, type LatLng } from "./geo";
 import { EventSchema } from "./schemas";
 import { getSportsEventById, getSportsEvents, sportsIdOf } from "./thesportsdb";
-import {
-  getTicketmasterEventById,
-  getTicketmasterEvents,
-  hasTicketmasterKey,
-  ticketmasterIdOf,
-} from "./ticketmaster";
-import type { Category, EventsResponse, LiventoEvent } from "./types";
+import { getTicketmasterEventById, getTicketmasterEvents, ticketmasterIdOf } from "./ticketmaster";
+import type { Category, EventsResponse, LiventoEvent, WebSearchState } from "./types";
+import { cachedWebEvents, getWebEventById, isWebEventId } from "./webEvents";
 
-export const SAMPLE_NOTICE = "Showing sample events — live data needs a Ticketmaster API key";
-const TM_DOWN_NOTICE = "Live events are unavailable right now — showing sample events";
 const TM_STALE_NOTICE =
   "Live events are unavailable right now — showing Ticketmaster results saved in the last 24 hours";
-const SPORTS_SAMPLE_NOTICE =
-  "Sports games are real (TheSportsDB). Other events are fictional samples — live listings need a Ticketmaster API key";
-const SPORTS_TM_DOWN_NOTICE =
-  "Live events are unavailable right now — sports games are real (TheSportsDB), other events are fictional samples";
+const LIVE_NOTICE =
+  "Sports are live from TheSportsDB; concerts, shows and more are found by AI web search — check each official page.";
+const WEB_NOTICE = "Concerts, shows and more are found by AI web search — check each official page.";
 const SPORTS_ONLY_NOTICE =
-  "Real upcoming games from TheSportsDB. Ticket prices aren't listed, so cost plans use labeled estimates";
+  "Real upcoming games from TheSportsDB. Ticket prices aren't listed, so cost plans use labeled estimates.";
+const SPORTS_WEB_EMPTY_NOTICE =
+  "Sports are live from TheSportsDB. AI web search found no matching concerts or shows nearby yet.";
+const WEB_EMPTY_NOTICE = "AI web search found no matching events nearby yet.";
+export const SAMPLE_NOTICE = "Showing labeled sample events.";
+const SAMPLE_PENDING_NOTICE = "Showing labeled sample events while AI web search looks for real ones near you.";
+const SAMPLE_WEB_EMPTY_NOTICE = "Showing labeled sample events: AI web search found no matching events nearby yet.";
+
+/** Discover's note for the no-Ticketmaster mix. Never mentions Ticketmaster. */
+function catalogNotice(sports: number, web: number, samples: number, state: WebSearchState): string | undefined {
+  if (samples > 0) {
+    return state === "off" ? SAMPLE_NOTICE : state === "pending" ? SAMPLE_PENDING_NOTICE : SAMPLE_WEB_EMPTY_NOTICE;
+  }
+  if (web > 0 || state === "pending") return sports > 0 ? LIVE_NOTICE : WEB_NOTICE;
+  if (sports > 0) return state === "off" ? SPORTS_ONLY_NOTICE : SPORTS_WEB_EMPTY_NOTICE;
+  return state === "cached" ? WEB_EMPTY_NOTICE : undefined;
+}
 
 function loadEvents(raw: unknown, label: string, extra?: (item: Record<string, unknown>) => Partial<LiventoEvent>) {
   const out: LiventoEvent[] = [];
@@ -72,13 +84,15 @@ export function localEventById(id: string): LiventoEvent | undefined {
 
 /**
  * One event by Livento id: curated and sample events locally, `tm_<id>` from
- * Ticketmaster, `tsdb_<idEvent>` from TheSportsDB. Lets /event/[id] and
+ * Ticketmaster, `tsdb_<idEvent>` from TheSportsDB, `web_<hash>` from the stored
+ * web-search results (until the event date passes). Lets /event/[id] and
  * /roadmap/[id] links work in a browser that never opened the event (shared
  * links, alert emails).
  */
 export async function findEventById(id: string): Promise<LiventoEvent | null> {
   const local = localEventById(id);
   if (local) return local;
+  if (isWebEventId(id)) return getWebEventById(id);
   const sportsId = sportsIdOf(id);
   if (sportsId) return getSportsEventById(sportsId);
   const tmId = ticketmasterIdOf(id);
@@ -196,37 +210,42 @@ export async function findEvents(q: CatalogQuery, today: string = todayISO()): P
   }
 
   // No Ticketmaster answer: real games from TheSportsDB (home venue within the
-  // radius) replace the sample sports events; everything else stays sample data.
+  // radius) plus events already found by AI web search for this city. Labeled
+  // samples only when neither has anything.
   // "from" goes along only when it's a later day: the server's today can be ahead of the venue's.
   const wantsSports = categories.length === 0 || categories.includes("sports");
-  const games = wantsSports
-    ? await getSportsEvents({
-        lat: origin?.lat,
-        lng: origin?.lng,
-        city,
-        state,
-        radiusMiles: q.radius,
-        from: from > today ? from : undefined,
-        to,
-      })
-    : [];
+  const [games, web] = await Promise.all([
+    wantsSports
+      ? getSportsEvents({
+          lat: origin?.lat,
+          lng: origin?.lng,
+          city,
+          state,
+          radiusMiles: q.radius,
+          from: from > today ? from : undefined,
+          to,
+        })
+      : Promise.resolve([]),
+    cachedWebEvents({ city, state, lat: origin?.lat, lng: origin?.lng, categories, from, to }),
+  ]);
   const sports = games.filter((e) => matchesKeyword(e, keyword)).map((e) => withDistance(e, origin));
+  const found = web.events.filter((e) => matchesKeyword(e, keyword));
 
-  const samples = sampleEvents()
-    .filter((e) => matchesCategories(e, categories))
-    .filter((e) => !(sports.length > 0 && e.category === "sports"))
-    .filter((e) => !e.date || (e.date >= from && e.date <= to))
-    .filter((e) => matchesKeyword(e, keyword))
-    .map((e) => withDistance(e, origin))
-    .sort(byNearest(city, state));
+  const samples =
+    sports.length > 0 || found.length > 0
+      ? []
+      : sampleEvents()
+          .filter((e) => matchesCategories(e, categories))
+          .filter((e) => !e.date || (e.date >= from && e.date <= to))
+          .filter((e) => matchesKeyword(e, keyword))
+          .map((e) => withDistance(e, origin))
+          .sort(byNearest(city, state));
 
-  const tmDown = hasTicketmasterKey();
-  let notice = tmDown ? TM_DOWN_NOTICE : SAMPLE_NOTICE;
-  if (sports.length > 0) notice = samples.length ? (tmDown ? SPORTS_TM_DOWN_NOTICE : SPORTS_SAMPLE_NOTICE) : SPORTS_ONLY_NOTICE;
-
+  const notice = catalogNotice(sports.length, found.length, samples.length, web.state);
   return {
-    events: [...sports, ...samples, ...curated.sort(byNearest(city, state))],
-    source: sports.length > 0 && samples.length === 0 ? "mixed" : "sample",
-    notice,
+    events: [...sports, ...found, ...samples, ...curated.sort(byNearest(city, state))],
+    source: samples.length > 0 ? "sample" : "mixed",
+    ...(notice ? { notice } : {}),
+    webSearch: web.state,
   };
 }

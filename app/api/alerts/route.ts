@@ -16,6 +16,7 @@ import { apiError, json, parseBody, siteOrigin } from "@/lib/http";
 import { isKvConfigured } from "@/lib/kv";
 import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
 import { AlertSubscribeSchema } from "@/lib/schemas";
+import { startWithPendingLink } from "@/lib/telegram-link";
 import type { AlertSubscribeResponse } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -41,9 +42,12 @@ export async function POST(request: Request) {
     }
     const payload = statelessStartPayload(req.city, req.stateCode, req.interests);
     if (payload) {
+      // With storage the payload also carries a link id, so the site notices the Start (lib/telegram-link).
+      const start = await startWithPendingLink(payload);
       return json<AlertSubscribeResponse>({
         ok: true,
-        telegramStartUrl: telegramStartUrl(payload),
+        telegramStartUrl: telegramStartUrl(start.arg),
+        linkId: start.linkId,
         message: "Open Telegram and tap Start — your top picks arrive right away.",
       });
     }
@@ -112,10 +116,12 @@ export async function POST(request: Request) {
     });
   }
 
+  const start = await startWithPendingLink(rec.id);
   return json<AlertSubscribeResponse>({
     ok: true,
     id: rec.id,
-    telegramStartUrl: telegramStartUrl(rec.id),
+    telegramStartUrl: telegramStartUrl(start.arg),
+    linkId: start.linkId,
     message: "Open the link in Telegram and tap Start to finish connecting.",
   });
 }

@@ -9,7 +9,14 @@ import { ErrorState, NoProfile, Notice, PageSkeleton, SampleBanner } from "@/com
 import { useToast } from "@/components/app/Toast";
 import { useAsync } from "@/components/app/useAsync";
 import ui from "@/components/app/ui.module.css";
-import { eventsQueryFromProfile, getEvents, logInteraction, recommend } from "@/lib/client-api";
+import {
+  eventsQueryFromProfile,
+  getEvents,
+  getWebEvents,
+  logInteraction,
+  readWebEventsCache,
+  recommend,
+} from "@/lib/client-api";
 import { eventDistanceMiles } from "@/lib/cost";
 import {
   getAppState,
@@ -33,9 +40,27 @@ import {
 } from "@/lib/types";
 import { AlertsBox } from "./AlertsBox";
 import styles from "./discover.module.css";
+import { useStickyAsync } from "./useStickyAsync";
 
 const MORE_PAGE = 12;
 const MAX_RANKED = 300; // /api/recommend accepts up to 300 events
+
+// Same wording as lib/catalog's notices, for the list after web results are merged in.
+const LIVE_NOTICE =
+  "Sports are live from TheSportsDB; concerts, shows and more are found by AI web search — check each official page.";
+const WEB_NOTICE = "Concerts, shows and more are found by AI web search — check each official page.";
+const SAMPLE_WEB_EMPTY_NOTICE = "Showing labeled sample events: AI web search found no matching events nearby yet.";
+
+const nameDateKey = (e: LiventoEvent) => `${e.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}|${e.date ?? ""}`;
+
+/** Adds web-search events to the list; labeled samples only stay when the web search found nothing. */
+function withWebEvents(base: LiventoEvent[], web: LiventoEvent[] | undefined): LiventoEvent[] {
+  if (!web?.length) return base;
+  const ids = new Set(base.map((e) => e.id));
+  const known = new Set(base.filter((e) => e.source === "web").map(nameDateKey));
+  const added = web.filter((e) => !ids.has(e.id) && !known.has(nameDateKey(e)));
+  return [...base.filter((e) => e.source !== "sample"), ...added];
+}
 
 function byDate(a: LiventoEvent, b: LiventoEvent): number {
   if (a.date && b.date) return a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
@@ -84,14 +109,28 @@ function Discover({ profile }: { profile: Profile }) {
   const [filter, setFilter] = useState("all");
   const [skippedNow, setSkippedNow] = useState<string[]>([]);
   const [moreCount, setMoreCount] = useState(MORE_PAGE);
+  const [webAttempt, setWebAttempt] = useState(0);
 
   // Refetch only when the search itself changes (not on every like/skip).
   const query = eventsQueryFromProfile(profile);
   const eventsKey = `${JSON.stringify(query)}#${attempt}`;
   const events = useAsync(eventsKey, (signal) => getEvents(query, signal));
-  const list = events.data?.events;
+  const base = events.data;
 
-  const recs = useAsync(list ? `${eventsKey}|rec` : null, (signal) => {
+  // Interests the server hasn't searched the web for yet: this browser's copy from
+  // the last 12 hours first, otherwise ask for the search (up to a minute).
+  const webPending = base?.webSearch === "pending";
+  const savedWeb = webPending ? readWebEventsCache(query) : null;
+  const web = useAsync(webPending && !savedWeb ? `${eventsKey}|web#${webAttempt}` : null, (signal) =>
+    getWebEvents(query, signal),
+  );
+  const webEvents = savedWeb ?? web.data?.events;
+  const webSearching = webPending && !webEvents && !web.error;
+  const list = base ? withWebEvents(base.events, webPending ? webEvents : undefined) : undefined;
+  const webFound = webPending ? (webEvents?.length ?? 0) : 0;
+
+  // Ranked once with what's there, and again when web results add events.
+  const recs = useStickyAsync(list ? `${eventsKey}|rec|${webFound > 0 ? `web${webFound}` : "base"}` : null, (signal) => {
     const state = getAppState();
     const latest = state.profile ?? profile;
     const skipped = new Set(latest.skipped);
@@ -107,9 +146,11 @@ function Discover({ profile }: { profile: Profile }) {
   const matchesFilter = (e: LiventoEvent) => filter === "all" || e.category === filter;
 
   const byId = new Map((list ?? []).map((e) => [e.id, e] as const));
+  // While the list is re-ranked after web results arrive, the previous picks stay up.
+  const rankedData = recs.data ?? (recs.loading ? recs.stale : undefined);
   let picks: { event: LiventoEvent; rec?: RecommendItem }[] = [];
-  if (recs.data) {
-    picks = recs.data.items
+  if (rankedData) {
+    picks = rankedData.items
       .flatMap((item) => {
         const event = byId.get(item.eventId);
         return event ? [{ event, rec: item }] : [];
@@ -122,8 +163,17 @@ function Discover({ profile }: { profile: Profile }) {
       .slice(0, 8)
       .map((event) => ({ event }));
   }
+  const showingStale = !recs.data && recs.loading && picks.length > 0;
+  const picksLoading = recs.loading && !showingStale;
   // Ranking has finished (with AI/rules picks, or with the by-date fallback after an error).
-  const ranked = !!recs.data || (!!recs.error && !!list);
+  const ranked = !!recs.data || showingStale || (!!recs.error && !!list);
+
+  const hasSamples = (list ?? []).some((e) => e.source === "sample");
+  let notice = base?.notice;
+  if (base && list && webPending && webEvents) {
+    if (webFound > 0) notice = list.some((e) => e.source === "thesportsdb") ? LIVE_NOTICE : WEB_NOTICE;
+    else if (hasSamples) notice = SAMPLE_WEB_EMPTY_NOTICE;
+  }
   const pickIds = new Set(picks.map((p) => p.event.id));
   const visiblePicks = picks.filter((p) => matchesFilter(p.event) && !hidden(p.event.id));
   const more = (list ?? []).filter((e) => !pickIds.has(e.id) && matchesFilter(e) && !hidden(e.id)).sort(byDate);
@@ -172,6 +222,7 @@ function Discover({ profile }: { profile: Profile }) {
   if (events.loading) status = `Finding events near ${profile.city}…`;
   else if (events.error) status = "Couldn't load events.";
   else if (recs.loading) status = `Found ${list?.length ?? 0} events. Picking your top 8…`;
+  else if (webSearching) status = `Showing your top ${picks.length} picks. Searching the web for concerts and shows…`;
   else if (recs.data) status = `Showing your top ${picks.length} picks.`;
   else if (recs.error) status = "Showing upcoming events by date.";
 
@@ -230,20 +281,40 @@ function Discover({ profile }: { profile: Profile }) {
 
       {events.data && list ? (
         <>
-          {events.data.source === "sample" ? (
+          {hasSamples ? (
             <div className={styles.banner}>
               <SampleBanner>
-                {events.data.notice ||
+                {notice ||
                   "Live listings aren't available right now, so these are fictional sample events for trying Livento."}
               </SampleBanner>
             </div>
-          ) : events.data.notice ? (
+          ) : notice ? (
             <div className={styles.banner}>
-              <Notice label="Note">{events.data.notice}</Notice>
+              <Notice label="Note">{notice}</Notice>
+            </div>
+          ) : null}
+
+          {webSearching ? (
+            <p className={styles.webRow} aria-hidden="true">
+              <span className={styles.webDot} />
+              <span>Searching the web for concerts and shows near {profile.city}…</span>
+              <span className={ui.meta}>This can take up to a minute. Everything below is ready to browse.</span>
+            </p>
+          ) : null}
+
+          {webPending && web.error && !webEvents ? (
+            <div className={styles.banner}>
+              <Notice label="Heads up">
+                We couldn&rsquo;t finish the web search for concerts and shows just now, so some may be missing.{" "}
+                <button type="button" className={ui.textButton} onClick={() => setWebAttempt((a) => a + 1)}>
+                  Try again
+                </button>
+              </Notice>
             </div>
           ) : null}
 
           {list.length === 0 ? (
+            webSearching ? null : (
             <div className={ui.outline}>
               <h2 className={ui.smallTitle}>No events found nearby yet</h2>
               <p className={styles.emptyText}>
@@ -258,6 +329,7 @@ function Discover({ profile }: { profile: Profile }) {
                 </button>
               </div>
             </div>
+            )
           ) : (
             <>
               {presentCategories.length > 1 ? (
@@ -292,16 +364,16 @@ function Discover({ profile }: { profile: Profile }) {
                   <h2 id="top-picks-title" className={ui.sectionTitle}>
                     Top picks for you
                   </h2>
-                  {recs.data ? (
+                  {rankedData ? (
                     <p className={ui.meta}>
-                      {recs.data.ranker === "llm"
+                      {rankedData.ranker === "llm"
                         ? "Scored by Livento's rules, then ordered by AI"
                         : "Scored by Livento's rules: interests, distance, budget, dates"}
                     </p>
                   ) : null}
                 </div>
 
-                {recs.loading ? (
+                {picksLoading ? (
                   <>
                     <p className={ui.status} aria-hidden="true">
                       Picking your top 8…

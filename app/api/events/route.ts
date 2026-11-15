@@ -2,13 +2,16 @@ import type { NextRequest } from "next/server";
 import { findEventById, findEvents } from "@/lib/catalog";
 import { apiError, json } from "@/lib/http";
 import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
-import { CATEGORIES, type Category, type EventsResponse } from "@/lib/types";
+import type { EventsResponse } from "@/lib/types";
+import { parseEventsQuery } from "./params";
 
 export const dynamic = "force-dynamic";
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** GET /api/events?city=&state=&lat=&lng=&radius=&categories=&from=&to=&keyword=  ·  GET /api/events?id=<event id> */
+/**
+ * GET /api/events?city=&state=&lat=&lng=&radius=&categories=&from=&to=&keyword=  ·  GET /api/events?id=<event id>
+ * Fast: sports, curated and already-stored web events. `webSearch: "pending"` means
+ * GET /api/events/web (same params) can still find more.
+ */
 export async function GET(request: NextRequest) {
   const limited = await rateLimit(request, "events", RATE_LIMITS.general);
   if (limited) return limited;
@@ -18,7 +21,7 @@ export async function GET(request: NextRequest) {
   // ?id=<livento id> — one event (shared links, alert emails); same response shape.
   const id = sp.get("id")?.trim();
   if (id !== undefined) {
-    if (!/^(tm|tsdb|cur|smp)_[\w-]{1,120}$/.test(id)) return apiError("Invalid request: check \"id\".", 400);
+    if (!/^(tm|tsdb|cur|smp|web)_[\w-]{1,120}$/.test(id)) return apiError("Invalid request: check \"id\".", 400);
     try {
       const event = await findEventById(id);
       if (!event) return apiError("We couldn't find that event. It may have ended or been removed.", 404);
@@ -33,43 +36,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const num = (key: string): number | undefined | null => {
-    const raw = sp.get(key);
-    if (raw === null || raw.trim() === "") return undefined;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-  };
-  const lat = num("lat");
-  const lng = num("lng");
-  const radius = num("radius");
-  if (lat === null || lng === null || radius === null) {
-    return apiError("Invalid request: lat, lng and radius must be numbers.", 400);
-  }
-  if ((lat !== undefined && Math.abs(lat) > 90) || (lng !== undefined && Math.abs(lng) > 180)) {
-    return apiError("Invalid request: coordinates are out of range.", 400);
-  }
-  const from = sp.get("from")?.trim() || undefined;
-  const to = sp.get("to")?.trim() || undefined;
-  if ((from && !DATE.test(from)) || (to && !DATE.test(to))) {
-    return apiError("Invalid request: dates must look like YYYY-MM-DD.", 400);
-  }
-  const categories = (sp.get("categories") ?? "")
-    .split(",")
-    .map((c) => c.trim().toLowerCase())
-    .filter((c): c is Category => (CATEGORIES as readonly string[]).includes(c));
+  const parsed = parseEventsQuery(sp);
+  if (!parsed.ok) return parsed.response;
 
   try {
-    const result: EventsResponse = await findEvents({
-      city: sp.get("city")?.slice(0, 100),
-      state: sp.get("state")?.slice(0, 10),
-      lat,
-      lng,
-      radius: radius === undefined ? undefined : Math.min(500, Math.max(1, radius)),
-      categories,
-      from,
-      to,
-      keyword: sp.get("keyword")?.slice(0, 100),
-    });
+    const result: EventsResponse = await findEvents(parsed.query);
     return json(result);
   } catch (err) {
     console.error("[events] failed", err instanceof Error ? err.name : "");

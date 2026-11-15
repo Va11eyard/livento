@@ -222,6 +222,7 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
   const distance = distanceText(eventDistanceMiles(event, profile));
   const price = priceInfo(event);
   const ticketUrl = event.source === "sample" ? undefined : safeExternalUrl(event.url);
+  const webHost = event.source === "web" && ticketUrl ? new URL(ticketUrl).hostname.replace(/^www\./, "") : undefined;
   const where = [event.venue, eventPlace(event)].filter(Boolean).join(", ");
 
   const toggleLike = () => {
@@ -278,7 +279,7 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
             <div>
               <dt>Tickets</dt>
               <dd className={styles.priceRow}>
-                {price.text}
+                {event.source === "web" && !price.known ? "Price not listed" : price.text}
                 {price.estimate ? <span className="tag estimate">Estimate</span> : null}
                 {event.source === "ticketmaster" && price.known ? (
                   <span className={ui.meta}>face value, fees not included</span>
@@ -290,12 +291,17 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
             {event.source === "sample" ? <span className="tag sample">Sample data</span> : null}
             {event.source === "curated" ? <span className="tag">Curated</span> : null}
             {event.source === "thesportsdb" ? <span className="tag">TheSportsDB</span> : null}
+            {event.source === "web" ? <span className="tag">Web</span> : null}
             {event.priceNote ? <span className={ui.meta}>{event.priceNote}</span> : null}
           </div>
           <div className={ui.actions}>
             {ticketUrl ? (
               <a className="pill" href={ticketUrl} target="_blank" rel="noopener noreferrer">
-                {event.source === "ticketmaster" ? "Tickets on Ticketmaster" : "Official site"}
+                {event.source === "ticketmaster"
+                  ? "Tickets on Ticketmaster"
+                  : event.source === "web"
+                    ? "Official page"
+                    : "Official site"}
                 <span className="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>
               </a>
             ) : (
@@ -316,6 +322,16 @@ function EventDetail({ event, profile, state }: { event: LiventoEvent; profile: 
               <a href="https://www.thesportsdb.com" target="_blank" rel="noopener noreferrer">
                 TheSportsDB<span className="sr-only"> (opens in a new tab)</span>
               </a>
+            </p>
+          ) : null}
+          {webHost ? (
+            <p className={styles.attribution}>
+              Found by AI web search ·{" "}
+              <a href={`https://${webHost}`} target="_blank" rel="noopener noreferrer">
+                {webHost}
+                <span className="sr-only"> (opens in a new tab)</span>
+              </a>
+              . Check dates and prices on the official page.
             </p>
           ) : null}
         </div>

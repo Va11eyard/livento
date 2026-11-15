@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppFooter } from "./AppFooter";
 import { AppNav } from "./AppNav";
 import { AssistantLauncher } from "./Assistant";
+import { TelegramLinkCatcher } from "./TelegramLinkCatcher";
 import { ToastProvider } from "./Toast";
 import styles from "./AppShell.module.css";
 
@@ -20,6 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
       <AppFooter />
       <AssistantLauncher />
+      <TelegramLinkCatcher />
     </ToastProvider>
   );
 }

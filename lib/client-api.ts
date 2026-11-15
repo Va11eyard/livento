@@ -1,7 +1,7 @@
 /**
  * Typed fetch wrappers for every Livento API route (spec §7).
  *
- * - Each call has an AbortController timeout (events 10 s, LLM routes 25 s).
+ * - Each call has an AbortController timeout (events 10 s, LLM routes 25 s, web search 62 s).
  * - Pass your own AbortSignal to cancel on unmount; a cancel rethrows the
  *   AbortError (check with `isAbortError`) so callers can ignore it.
  * - Every other failure becomes a ClientApiError with a friendly message that
@@ -22,6 +22,7 @@ import type {
   HealthResponse,
   InsightsRequest,
   InsightsResponse,
+  LiventoEvent,
   LogRequest,
   PlanRequest,
   PlanResponse,
@@ -32,6 +33,8 @@ import type {
   RecommendResponse,
   RoadmapRequest,
   RoadmapResponse,
+  TelegramLinkRequest,
+  TelegramLinkResponse,
   WalletAutosaveRequest,
   WalletConfirmRequest,
   WalletConfirmResponse,
@@ -40,10 +43,13 @@ import type {
   WalletDepositResponse,
   WalletSummary,
   WalletWithdrawRequest,
+  WebEventsResponse,
 } from "@/lib/types";
+import { todayISO } from "@/lib/dates";
 
 export const TIMEOUTS = {
   events: 10_000,
+  webEvents: 62_000, // the server's web search runs up to ~45 s (route limit 60 s)
   llm: 25_000,
   standard: 10_000,
   log: 5_000,
@@ -176,6 +182,7 @@ function isObject(v: unknown): v is Record<string, unknown> {
 }
 
 const isEventsResponse = (d: unknown): d is EventsResponse => isObject(d) && Array.isArray(d.events);
+const isWebEventsResponse = (d: unknown): d is WebEventsResponse => isObject(d) && Array.isArray(d.events);
 const isRecommendResponse = (d: unknown): d is RecommendResponse => isObject(d) && Array.isArray(d.items);
 const isPlanResponse = (d: unknown): d is PlanResponse =>
   isObject(d) && Array.isArray(d.lines) && typeof d.total === "number";
@@ -241,6 +248,85 @@ export function getEventById(id: string, signal?: AbortSignal): Promise<EventsRe
   return call(`/api/events?${qs}`, { timeoutMs: TIMEOUTS.events, signal }, isEventsResponse);
 }
 
+// Web-search results are remembered per query on this browser for 12 hours, so
+// revisits show them at once without asking the server to search again.
+const WEB_CACHE_PREFIX = "livento:web:v1:";
+const WEB_CACHE_MS = 12 * 3_600_000;
+const WEB_CACHE_MAX = 8;
+
+function webCacheKey(query: EventsQuery): string {
+  return `${WEB_CACHE_PREFIX}${JSON.stringify([
+    (query.city ?? "").trim().toLowerCase(),
+    (query.state ?? "").trim().toUpperCase(),
+    [...(query.categories ?? [])].sort().join(","),
+    query.from ?? "",
+    query.to ?? "",
+  ])}`;
+}
+
+function savedAtOf(raw: string | null): number {
+  try {
+    const savedAt = raw ? (JSON.parse(raw) as { savedAt?: unknown }).savedAt : undefined;
+    return typeof savedAt === "number" ? savedAt : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Upcoming web-search events saved on this browser for the query in the last 12 hours, or null. */
+export function readWebEventsCache(query: EventsQuery): LiventoEvent[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(webCacheKey(query));
+    const savedAt = savedAtOf(raw);
+    if (!raw || Date.now() - savedAt > WEB_CACHE_MS) return null;
+    const events: unknown = (JSON.parse(raw) as { events?: unknown }).events;
+    if (!Array.isArray(events)) return null;
+    const today = todayISO();
+    return events.filter(
+      (e): e is LiventoEvent =>
+        isObject(e) && typeof e.id === "string" && e.source === "web" && typeof e.date === "string" && e.date >= today,
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeWebEventsCache(query: EventsQuery, events: LiventoEvent[]): void {
+  try {
+    const store = window.localStorage;
+    const key = webCacheKey(query);
+    const others: { key: string; savedAt: number }[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (k && k !== key && k.startsWith(WEB_CACHE_PREFIX)) others.push({ key: k, savedAt: savedAtOf(store.getItem(k)) });
+    }
+    others
+      .sort((a, b) => b.savedAt - a.savedAt)
+      .forEach((o, i) => {
+        if (i >= WEB_CACHE_MAX - 1 || Date.now() - o.savedAt > WEB_CACHE_MS) store.removeItem(o.key);
+      });
+    store.setItem(key, JSON.stringify({ savedAt: Date.now(), events }));
+  } catch {
+    // storage full or blocked: the results still show this time
+  }
+}
+
+/**
+ * GET /api/events/web — real events found by AI web search for interests not
+ * searched yet (up to ~60 s). The answer is remembered on this browser for 12 hours.
+ */
+export async function getWebEvents(query: EventsQuery, signal?: AbortSignal): Promise<WebEventsResponse> {
+  const qs = eventsSearchParams(query).toString();
+  const res = await call(
+    `/api/events/web${qs ? `?${qs}` : ""}`,
+    { timeoutMs: TIMEOUTS.webEvents, signal },
+    isWebEventsResponse,
+  );
+  writeWebEventsCache(query, res.events);
+  return res;
+}
+
 /** POST /api/recommend — top 8 with a "why this" line. */
 export function recommend(req: RecommendRequest, signal?: AbortSignal): Promise<RecommendResponse> {
   return call("/api/recommend", { method: "POST", body: req, timeoutMs: TIMEOUTS.llm, signal }, isRecommendResponse);
@@ -264,6 +350,18 @@ export function insights(req: InsightsRequest, signal?: AbortSignal): Promise<In
 /** POST /api/alerts — email or Telegram alerts. `ok: false` + message when not configured. */
 export function subscribeAlerts(req: AlertSubscribeRequest, signal?: AbortSignal): Promise<AlertSubscribeResponse> {
   return call("/api/alerts", { method: "POST", body: req, timeoutMs: TIMEOUTS.standard, signal }, isAlertResponse);
+}
+
+const isTelegramLinkResponse = (d: unknown): d is TelegramLinkResponse => isObject(d) && typeof d.ok === "boolean";
+
+/**
+ * POST /api/telegram/link — link this browser to the user's Telegram chat (token or Mini App
+ * initData), send picks there, disconnect, or poll a pending link. `ok: false` + message when
+ * Telegram can't reach the chat.
+ */
+export function telegramLink(req: TelegramLinkRequest, signal?: AbortSignal): Promise<TelegramLinkResponse> {
+  const timeoutMs = req.action === "picks" ? TIMEOUTS.llm : TIMEOUTS.standard;
+  return call("/api/telegram/link", { method: "POST", body: req, timeoutMs, signal }, isTelegramLinkResponse);
 }
 
 /** POST /api/checkout — test-mode checkout URL, or `{ demo: true }` when payments are not configured. */

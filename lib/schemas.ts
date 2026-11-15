@@ -19,7 +19,7 @@ export const PresaleSchema = z.object({
 
 export const EventSchema = z.object({
   id: z.string().trim().min(1).max(200),
-  source: z.enum(["ticketmaster", "thesportsdb", "curated", "sample"]),
+  source: z.enum(["ticketmaster", "thesportsdb", "curated", "sample", "web"]),
   name: z.string().trim().min(1).max(300),
   category: CategorySchema,
   genre: shortText(100).optional(),
@@ -124,6 +124,21 @@ export const AlertSubscribeSchema = z.object({
   favourites: z.array(shortText(80)).max(30).default([]),
   city: shortText(100).default(""),
   stateCode: shortText(10).optional(),
+});
+
+/** POST /api/telegram/link. The token and initData are checked by lib/telegram-link. */
+export const TelegramLinkSchema = z.object({
+  action: z.enum(["link", "picks", "unlink", "status"]),
+  token: z.string().trim().max(80).optional(),
+  initData: z.string().max(4096).optional(),
+  linkId: z.string().trim().regex(/^[0-9a-f]{20}$/, "Unknown link.").optional(),
+  profile: z
+    .object({
+      city: shortText(100).min(1),
+      stateCode: shortText(10).optional(),
+      interests: z.array(CategorySchema).max(CATEGORIES.length).default([]),
+    })
+    .optional(),
 });
 
 export const CheckoutRequestSchema = z.object({

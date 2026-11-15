@@ -22,6 +22,7 @@ import {
 } from "./alerts";
 import { isKvConfigured } from "./kv";
 import type { PickTarget } from "./picks";
+import { tgLinkToken } from "./telegram-link";
 import { parseTgPayload, tgPayloadFor, type TgPayloadTarget } from "./telegram-payload";
 import { CATEGORIES, type Category } from "./types";
 
@@ -42,7 +43,7 @@ export interface TgMessage {
   message_id: number;
   date?: number;
   chat?: { id?: ChatId; type?: string };
-  from?: { id?: number; is_bot?: boolean };
+  from?: { id?: number; is_bot?: boolean; first_name?: string; username?: string };
   via_bot?: unknown;
   text?: string;
   reply_markup?: TgInlineMarkup;
@@ -93,13 +94,50 @@ export function profileLine(t: PickTarget): string {
 export function openLiventoButton(site: string, payload: string | null, text = "Open Livento"): TgInlineButton | null {
   const url = payload ? `${site}/onboarding?tg=${encodeURIComponent(payload)}` : `${site}/`;
   if (url.startsWith("https://")) return { text, web_app: { url } };
-  let host = "";
+  return urlButton(text, url);
+}
+
+/** A plain link button; null for a URL Telegram refuses (not http(s), or a local or IP host). */
+export function urlButton(text: string, url: string): TgInlineButton | null {
   try {
-    host = new URL(url).hostname;
+    const { protocol, hostname } = new URL(url);
+    if (protocol !== "https:" && protocol !== "http:") return null;
+    return hostname.includes(".") && !/^[\d.]+$/.test(hostname) ? { text, url } : null;
   } catch {
     return null;
   }
-  return host.includes(".") && !/^[\d.]+$/.test(host) ? { text, url } : null;
+}
+
+/**
+ * "✓ Show on Livento": the site's /profile with this chat's link token (lib/telegram-link), so
+ * the site learns the chat is connected. A plain link, not a Mini App, so it opens the browser
+ * where the user's Livento profile lives. Null without a bot token or on a local host.
+ */
+export function showOnLiventoButton(site: string, chatId: ChatId): TgInlineButton | null {
+  const token = tgLinkToken(chatId);
+  return token ? urlButton("✓ Show on Livento", `${site}/profile?tg_link=${encodeURIComponent(token)}`) : null;
+}
+
+/** Telegram's own errors for a chat the bot can't reach (blocked, deleted, never started). */
+const UNREACHABLE = /forbidden|blocked|chat not found|user not found|deactivated|kicked/i;
+
+/** True when a failed Bot API description means the chat can't be reached. */
+export function isUnreachable(description: string | undefined): boolean {
+  return UNREACHABLE.test(description ?? "");
+}
+
+/** The first name and username of a private chat, for "Telegram connected as …". */
+export async function getChatIdentity(
+  chatId: ChatId,
+): Promise<{ ok: true; name?: string; username?: string } | { ok: false; unreachable: boolean }> {
+  const res = await telegramCall<{ first_name?: unknown; username?: unknown }>("getChat", { chat_id: chatId });
+  if (!res.ok || !res.result) return { ok: false, unreachable: isUnreachable(res.description) };
+  const { first_name, username } = res.result;
+  return {
+    ok: true,
+    name: typeof first_name === "string" && first_name.trim() ? first_name.trim().slice(0, 64) : undefined,
+    username: typeof username === "string" && /^[A-Za-z0-9_]{1,32}$/.test(username) ? username : undefined,
+  };
 }
 
 /** An inline keyboard without the buttons that aren't available (null) or empty rows. */

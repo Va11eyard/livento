@@ -84,6 +84,11 @@ export function EventCard({
               TheSportsDB
             </span>
           ) : null}
+          {event.source === "web" ? (
+            <span className="tag" title={event.attribution || "Found by AI web search"}>
+              Web
+            </span>
+          ) : null}
           {liked ? <span className={styles.likedMark}>Liked</span> : null}
         </div>
 
@@ -97,7 +102,9 @@ export function EventCard({
 
         <p className={styles.facts}>
           {distance ? <span>{distance}</span> : null}
-          <span className={styles.price}>{price.text}</span>
+          <span className={styles.price}>
+            {event.source === "web" && !price.known ? "Price not listed" : price.text}
+          </span>
           {price.estimate ? <span className="tag estimate">Estimate</span> : null}
           {event.source === "ticketmaster" && price.known ? <span>face value, fees extra</span> : null}
         </p>

@@ -36,6 +36,7 @@ import {
   type ProfileMedia,
   type ProfileQuote,
   type ProfileSocial,
+  type TelegramLink,
   type WalletLink,
   type WalletSummary,
 } from "@/lib/types";
@@ -273,6 +274,22 @@ function sanitizeWallet(raw: unknown): WalletLink | undefined {
   return { token: w.token, createdAt: isString(w.createdAt) ? w.createdAt : new Date().toISOString() };
 }
 
+/** "<chat id>.<mac>" from the bot's "✓ Show on Livento" link (lib/telegram-link); anything else is dropped. */
+function sanitizeTelegram(raw: unknown): TelegramLink | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const t = raw as Record<string, unknown>;
+  if (!isString(t.token) || !/^[1-9]\d{0,19}\.[A-Za-z0-9_-]{32}$/.test(t.token)) return undefined;
+  const handle = (v: unknown) => (isString(v) && /^[A-Za-z0-9_]{1,32}$/.test(v) ? v : undefined);
+  const name = cleanLine(t.name, 64);
+  return {
+    token: t.token,
+    ...(name ? { name } : {}),
+    ...(handle(t.username) ? { username: handle(t.username) } : {}),
+    ...(handle(t.bot) ? { bot: handle(t.bot) } : {}),
+    linkedAt: isString(t.linkedAt) ? t.linkedAt : new Date().toISOString(),
+  };
+}
+
 /** Longest AI or curated quote kept (custom quotes are capped at PROFILE_LIMITS.quote). */
 const MAX_QUOTE_CHARS = 240;
 const COVER_CHOICES: readonly string[] = ["auto", ...COVER_PRESETS, "photo"];
@@ -335,6 +352,7 @@ function normalizeState(raw: unknown): AppState {
     insights: sanitizeInsights(r.insights),
     wallet: sanitizeWallet(r.wallet),
     social: sanitizeSocial(r.social),
+    telegram: sanitizeTelegram(r.telegram),
   };
 }
 
@@ -623,6 +641,17 @@ export function setWallet(token: string) {
   const wallet = sanitizeWallet({ token, createdAt: new Date().toISOString() });
   if (!wallet) return;
   update((s) => (s.wallet?.token === wallet.token ? s : { ...s, wallet }));
+}
+
+/** Links this browser to the user's Telegram chat (from POST /api/telegram/link). */
+export function setTelegram(link: Omit<TelegramLink, "linkedAt">) {
+  const telegram = sanitizeTelegram({ ...link, linkedAt: new Date().toISOString() });
+  if (telegram) update((s) => ({ ...s, telegram }));
+}
+
+/** Forgets the Telegram link (Disconnect, or a token the server no longer accepts). */
+export function clearTelegram() {
+  update((s) => (s.telegram ? { ...s, telegram: undefined } : s));
 }
 
 /** Forgets a wallet link the server no longer accepts (key changed, customer gone). */
