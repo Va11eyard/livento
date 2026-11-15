@@ -111,6 +111,24 @@ function SavingsPlan({
     );
   };
 
+  // No ticket price listed and nothing else to pay (e.g. a local event): there's nothing to plan yet.
+  if (plan.total <= 0) {
+    return (
+      <div className={`${ui.panel} ${styles.planCard}`}>
+        <p className={styles.panelKicker}>Weekly savings plan</p>
+        <p className={ui.figure}>Price not listed</p>
+        <p>Enter the ticket price in the cost table to see how much to save each week.</p>
+        {envelope ? (
+          <div className={ui.actions}>
+            <Link href="/envelopes" className="pill alt">
+              Open your wallet <span aria-hidden="true">↗</span>
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className={`${ui.panel} ${styles.planCard}`}>
       <p className={styles.panelKicker}>Weekly savings plan</p>
@@ -128,7 +146,7 @@ function SavingsPlan({
             for {weeksLabel(plan.weeks)} to have {usd0(plan.total)} by {deadlineText(plan)}.
           </>
         ) : (
-          <>What you&rsquo;ve set aside covers the {usd0(plan.total)} estimate.</>
+          <>Your wallet already covers the {usd0(plan.total)} estimate.</>
         )}{" "}
         <span className="tag estimate">Estimate</span>
       </p>
