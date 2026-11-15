@@ -85,19 +85,53 @@ async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   return value;
 }
 
-/** Coordinates for "venue, city, state" or a city: built-in US cities first, then Nominatim. */
+const PHOTON = "https://photon.komoot.io/api/";
+
+/**
+ * Coordinates for a venue or neighborhood in a city (or the city itself): Photon first (good at
+ * venue names, biased to the city), then Nominatim, and the city center as the last resort.
+ */
 export async function geocode(query: string, city?: string, state?: string): Promise<LatLng | null> {
-  const known = !query.trim() || query.trim().toLowerCase() === (city ?? "").toLowerCase() ? findCity(city ?? "", state) : null;
-  if (known) return { lat: known.lat, lng: known.lng };
-  const q = [query, city, state, "USA"].filter(Boolean).join(", ");
-  return cached(`geo:v1:${q.toLowerCase()}`, async () => {
-    const url = `${NOMINATIM}?format=jsonv2&limit=1&countrycodes=us&q=${encodeURIComponent(q)}`;
+  const known = city ? findCity(city, state) : null;
+  const center = known ? { lat: known.lat, lng: known.lng } : null;
+  const text = query.trim();
+  if (!text || text.toLowerCase() === (city ?? "").trim().toLowerCase()) {
+    return center ?? (city ? geocodeText([city, state, "USA"].filter(Boolean).join(", "), null) : null);
+  }
+  const found = await geocodeText(text, center).catch(() => null);
+  return found ?? center;
+}
+
+async function geocodeText(text: string, bias: LatLng | null): Promise<LatLng | null> {
+  return cached(`geo:v2:${text.toLowerCase()}:${bias ? `${bias.lat.toFixed(2)},${bias.lng.toFixed(2)}` : ""}`, async () => {
+    // Photon (OpenStreetMap, komoot): biased to the city; accept a match within ~60 miles of it.
+    try {
+      const params = new URLSearchParams({ q: text, limit: "1" });
+      if (bias) {
+        params.set("lat", String(bias.lat));
+        params.set("lon", String(bias.lng));
+      }
+      const res = await fetch(`${PHOTON}?${params}`, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(6_000) });
+      if (res.ok) {
+        const data = (await res.json()) as { features?: { geometry?: { coordinates?: [number, number] } }[] };
+        const [lng, lat] = data.features?.[0]?.geometry?.coordinates ?? [];
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          const point = { lat: Number(lat), lng: Number(lng) };
+          if (!bias || distanceMiles(bias, point) <= 60) return point;
+        }
+      }
+    } catch {
+      // fall through to Nominatim
+    }
+    const url = `${NOMINATIM}?format=jsonv2&limit=1&countrycodes=us&q=${encodeURIComponent(text)}`;
     const res = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" }, signal: AbortSignal.timeout(6_000) });
     if (!res.ok) return null;
     const rows = (await res.json()) as { lat?: string; lon?: string }[];
     const lat = Number(rows[0]?.lat);
     const lng = Number(rows[0]?.lon);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const point = { lat, lng };
+    return !bias || distanceMiles(bias, point) <= 60 ? point : null;
   });
 }
 
