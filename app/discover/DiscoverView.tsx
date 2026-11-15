@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { EventCard } from "@/components/app/EventCard";
 import { categoryLabel, usd0 } from "@/components/app/format";
-import { ErrorState, NoProfile, Notice, PageSkeleton, SampleBanner } from "@/components/app/States";
+import {
+  ErrorState,
+  NoProfile,
+  Notice,
+  PageSkeleton,
+  SampleBanner,
+} from "@/components/app/States";
 import { useToast } from "@/components/app/Toast";
 import { useAsync } from "@/components/app/useAsync";
 import ui from "@/components/app/ui.module.css";
@@ -48,25 +54,36 @@ const MAX_RANKED = 300; // /api/recommend accepts up to 300 events
 // Same wording as lib/catalog's notices, for the list after web results are merged in.
 const LIVE_NOTICE =
   "Sports are live from TheSportsDB; concerts, shows and more are found by AI web search — check each official page.";
-const WEB_NOTICE = "Concerts, shows and more are found by AI web search — check each official page.";
+const WEB_NOTICE =
+  "Concerts, shows and more are found by AI web search — check each official page.";
 const SPORTS_WEB_EMPTY_NOTICE =
   "Sports are live from TheSportsDB. AI web search found no matching concerts or shows nearby yet.";
 const noEventsNotice = (city: string) =>
   `No events found near ${city} yet. Try a bigger travel radius or more interests.`;
 
-const nameDateKey = (e: LiventoEvent) => `${e.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}|${e.date ?? ""}`;
+const nameDateKey = (e: LiventoEvent) =>
+  `${e.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()}|${e.date ?? ""}`;
 
 /** Adds web-search events to the list (only real events: samples are never listed). */
-function withWebEvents(base: LiventoEvent[], web: LiventoEvent[] | undefined): LiventoEvent[] {
+function withWebEvents(
+  base: LiventoEvent[],
+  web: LiventoEvent[] | undefined,
+): LiventoEvent[] {
   if (!web?.length) return base;
   const ids = new Set(base.map((e) => e.id));
-  const known = new Set(base.filter((e) => e.source === "web").map(nameDateKey));
+  const known = new Set(
+    base.filter((e) => e.source === "web").map(nameDateKey),
+  );
   const added = web.filter((e) => !ids.has(e.id) && !known.has(nameDateKey(e)));
   return [...base, ...added];
 }
 
 function byDate(a: LiventoEvent, b: LiventoEvent): number {
-  if (a.date && b.date) return a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
+  if (a.date && b.date)
+    return a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
   if (a.date) return -1;
   if (b.date) return 1;
   return a.name.localeCompare(b.name);
@@ -92,7 +109,13 @@ function interestsText(profile: Profile): string {
   return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
-function CardGridSkeleton({ count, columns }: { count: number; columns: 2 | 3 }) {
+function CardGridSkeleton({
+  count,
+  columns,
+}: {
+  count: number;
+  columns: 2 | 3;
+}) {
   return (
     <div className={columns === 2 ? ui.grid2 : ui.grid3} aria-hidden="true">
       {Array.from({ length: count }, (_, i) => (
@@ -124,29 +147,47 @@ function Discover({ profile }: { profile: Profile }) {
   // the last 12 hours first, otherwise ask for the search (up to a minute).
   const webPending = base?.webSearch === "pending";
   const savedWeb = webPending ? readWebEventsCache(query) : null;
-  const web = useAsync(webPending && !savedWeb ? `${eventsKey}|web#${webAttempt}` : null, (signal) =>
-    getWebEvents(query, signal),
+  const web = useAsync(
+    webPending && !savedWeb ? `${eventsKey}|web#${webAttempt}` : null,
+    (signal) => getWebEvents(query, signal),
   );
   const webEvents = savedWeb ?? web.data?.events;
   const webSearching = webPending && !webEvents && !web.error;
-  const list = base ? withWebEvents(base.events, webPending ? webEvents : undefined) : undefined;
+  const list = base
+    ? withWebEvents(base.events, webPending ? webEvents : undefined)
+    : undefined;
   const webFound = webPending ? (webEvents?.length ?? 0) : 0;
 
   // Ranked once with what's there, and again when web results add events.
-  const recs = useStickyAsync(list ? `${eventsKey}|rec|${webFound > 0 ? `web${webFound}` : "base"}` : null, (signal) => {
-    const state = getAppState();
-    const latest = state.profile ?? profile;
-    const skipped = new Set(latest.skipped);
-    const candidates = (list ?? []).filter((e) => !skipped.has(e.id)).slice(0, MAX_RANKED);
-    return recommend({ profile: latest, events: candidates, recentGoalCategories: recentGoalCategories(state) }, signal);
-  });
+  const recs = useStickyAsync(
+    list
+      ? `${eventsKey}|rec|${webFound > 0 ? `web${webFound}` : "base"}`
+      : null,
+    (signal) => {
+      const state = getAppState();
+      const latest = state.profile ?? profile;
+      const skipped = new Set(latest.skipped);
+      const candidates = (list ?? [])
+        .filter((e) => !skipped.has(e.id))
+        .slice(0, MAX_RANKED);
+      return recommend(
+        {
+          profile: latest,
+          events: candidates,
+          recentGoalCategories: recentGoalCategories(state),
+        },
+        signal,
+      );
+    },
+  );
 
   const likedSet = new Set(profile.liked);
   const skippedSet = new Set(profile.skipped);
   const nowSet = new Set(skippedNow);
   // Skipped in an earlier visit: hidden. Skipped just now: shown with Undo.
   const hidden = (id: string) => skippedSet.has(id) && !nowSet.has(id);
-  const matchesFilter = (e: LiventoEvent) => filter === "all" || e.category === filter;
+  const matchesFilter = (e: LiventoEvent) =>
+    filter === "all" || e.category === filter;
 
   const byId = new Map((list ?? []).map((e) => [e.id, e] as const));
   // While the list is re-ranked after web results arrive, the previous picks stay up.
@@ -175,12 +216,21 @@ function Discover({ profile }: { profile: Profile }) {
   if (base && list && webPending && webEvents) {
     const hasSports = list.some((e) => e.source === "thesportsdb");
     if (webFound > 0) notice = hasSports ? LIVE_NOTICE : WEB_NOTICE;
-    else notice = hasSports ? SPORTS_WEB_EMPTY_NOTICE : noEventsNotice(profile.city);
+    else
+      notice = hasSports
+        ? SPORTS_WEB_EMPTY_NOTICE
+        : noEventsNotice(profile.city);
   }
   const pickIds = new Set(picks.map((p) => p.event.id));
-  const visiblePicks = picks.filter((p) => matchesFilter(p.event) && !hidden(p.event.id));
-  const more = (list ?? []).filter((e) => !pickIds.has(e.id) && matchesFilter(e) && !hidden(e.id)).sort(byDate);
-  const presentCategories = CATEGORIES.filter((c) => (list ?? []).some((e) => e.category === c));
+  const visiblePicks = picks.filter(
+    (p) => matchesFilter(p.event) && !hidden(p.event.id),
+  );
+  const more = (list ?? [])
+    .filter((e) => !pickIds.has(e.id) && matchesFilter(e) && !hidden(e.id))
+    .sort(byDate);
+  const presentCategories = CATEGORIES.filter((c) =>
+    (list ?? []).some((e) => e.category === c),
+  );
 
   const onOpen = (e: LiventoEvent) => {
     saveEvent(e);
@@ -193,7 +243,10 @@ function Discover({ profile }: { profile: Profile }) {
     }
     likeEvent(e);
     log(e.id, "like");
-    notify("Saved to your likes", "Likes tune your next picks and show up in the comparator.");
+    notify(
+      "Saved to your likes",
+      "Likes tune your next picks and show up in the comparator.",
+    );
   };
   const onSkip = (e: LiventoEvent) => {
     skipEvent(e.id);
@@ -205,7 +258,11 @@ function Discover({ profile }: { profile: Profile }) {
     setSkippedNow((ids) => ids.filter((id) => id !== e.id));
   };
 
-  const card = (event: LiventoEvent, rec: RecommendItem | undefined, size: "large" | "small") => (
+  const card = (
+    event: LiventoEvent,
+    rec: RecommendItem | undefined,
+    size: "large" | "small",
+  ) => (
     <EventCard
       key={event.id}
       event={event}
@@ -224,8 +281,10 @@ function Discover({ profile }: { profile: Profile }) {
   let status = "";
   if (events.loading) status = `Finding events near ${profile.city}…`;
   else if (events.error) status = "Couldn't load events.";
-  else if (recs.loading) status = `Found ${list?.length ?? 0} events. Picking your top 8…`;
-  else if (webSearching) status = `Showing your top ${picks.length} picks. Searching the web for concerts and shows…`;
+  else if (recs.loading)
+    status = `Found ${list?.length ?? 0} events. Picking your top 8…`;
+  else if (webSearching)
+    status = `Showing your top ${picks.length} picks. Searching the web for concerts and shows…`;
   else if (recs.data) status = `Showing your top ${picks.length} picks.`;
   else if (recs.error) status = "Showing upcoming events by date.";
 
@@ -240,7 +299,8 @@ function Discover({ profile }: { profile: Profile }) {
           </Link>
         </div>
         <p className="lead muted">
-          Matched to {interestsText(profile)} within {profile.radiusMiles} miles. Open any event to see its full cost.
+          Matched to {interestsText(profile)} within {profile.radiusMiles}{" "}
+          miles. Open any event to see its full cost.
         </p>
       </header>
 
@@ -253,8 +313,8 @@ function Discover({ profile }: { profile: Profile }) {
               </Link>
             }
           >
-            You&rsquo;re exploring with a fictional sample profile: {profile.city},{" "}
-            {usd0(profile.monthlyFunBudget)} a month for fun.
+            You&rsquo;re exploring with a fictional sample profile:{" "}
+            {profile.city}, {usd0(profile.monthlyFunBudget)} a month for fun.
           </SampleBanner>
         </div>
       ) : null}
@@ -293,16 +353,26 @@ function Discover({ profile }: { profile: Profile }) {
           {webSearching ? (
             <p className={styles.webRow} aria-hidden="true">
               <span className={styles.webDot} />
-              <span>Searching the web for concerts and shows near {profile.city}…</span>
-              <span className={ui.meta}>This can take up to a minute. Everything below is ready to browse.</span>
+              <span>
+                Searching the web for concerts and shows near {profile.city}…
+              </span>
+              <span className={ui.meta}>
+                This can take up to a minute. Everything below is ready to
+                browse.
+              </span>
             </p>
           ) : null}
 
           {webPending && web.error && !webEvents ? (
             <div className={styles.banner}>
               <Notice label="Heads up">
-                We couldn&rsquo;t finish the web search for concerts and shows just now, so some may be missing.{" "}
-                <button type="button" className={ui.textButton} onClick={() => setWebAttempt((a) => a + 1)}>
+                We couldn&rsquo;t finish the web search for concerts and shows
+                just now, so some may be missing.{" "}
+                <button
+                  type="button"
+                  className={ui.textButton}
+                  onClick={() => setWebAttempt((a) => a + 1)}
+                >
                   Try again
                 </button>
               </Notice>
@@ -311,20 +381,27 @@ function Discover({ profile }: { profile: Profile }) {
 
           {list.length === 0 ? (
             webSearching ? null : (
-            <div className={ui.outline}>
-              <h2 className={ui.smallTitle}>No events found near {profile.city} yet</h2>
-              <p className={styles.emptyText}>
-                Try a bigger travel radius or more interests, then check back. New listings appear often.
-              </p>
-              <div className={ui.actions}>
-                <Link href="/onboarding" className="pill small">
-                  Edit profile
-                </Link>
-                <button type="button" className="pill small alt" onClick={() => setAttempt((a) => a + 1)}>
-                  Search again
-                </button>
+              <div className={ui.outline}>
+                <h2 className={ui.smallTitle}>
+                  No events found near {profile.city} yet
+                </h2>
+                <p className={styles.emptyText}>
+                  Try a bigger travel radius or more interests, then check back.
+                  New listings appear often.
+                </p>
+                <div className={ui.actions}>
+                  <Link href="/onboarding" className="pill small">
+                    Edit profile
+                  </Link>
+                  <button
+                    type="button"
+                    className="pill small alt"
+                    onClick={() => setAttempt((a) => a + 1)}
+                  >
+                    Search again
+                  </button>
+                </div>
               </div>
-            </div>
             )
           ) : (
             <>
@@ -355,7 +432,11 @@ function Discover({ profile }: { profile: Profile }) {
                 </div>
               ) : null}
 
-              <section className={styles.picks} aria-labelledby="top-picks-title" aria-busy={recs.loading}>
+              <section
+                className={styles.picks}
+                aria-labelledby="top-picks-title"
+                aria-busy={recs.loading}
+              >
                 <div className={ui.sectionHead}>
                   <h2 id="top-picks-title" className={ui.sectionTitle}>
                     Top picks for you
@@ -381,8 +462,13 @@ function Discover({ profile }: { profile: Profile }) {
                 {recs.error ? (
                   <div className={styles.banner}>
                     <Notice label="Heads up">
-                      We couldn&rsquo;t rank events right now, so here are the next ones by date.{" "}
-                      <button type="button" className={ui.textButton} onClick={() => setAttempt((a) => a + 1)}>
+                      We couldn&rsquo;t rank events right now, so here are the
+                      next ones by date.{" "}
+                      <button
+                        type="button"
+                        className={ui.textButton}
+                        onClick={() => setAttempt((a) => a + 1)}
+                      >
                         Try again
                       </button>
                     </Notice>
@@ -391,7 +477,9 @@ function Discover({ profile }: { profile: Profile }) {
 
                 {ranked ? (
                   visiblePicks.length ? (
-                    <div className={ui.grid2}>{visiblePicks.map((p) => card(p.event, p.rec, "large"))}</div>
+                    <div className={ui.grid2}>
+                      {visiblePicks.map((p) => card(p.event, p.rec, "large"))}
+                    </div>
                   ) : (
                     <p className={ui.status}>
                       {filter !== "all"
@@ -404,38 +492,58 @@ function Discover({ profile }: { profile: Profile }) {
                 ) : null}
               </section>
 
-              <section className={ui.blockRule} aria-labelledby="more-events-title">
-                <div className={ui.sectionHead}>
-                  <h2 id="more-events-title" className={ui.sectionTitle}>
-                    {ranked ? "More events" : "Upcoming near you"}
-                  </h2>
-                  <p className={ui.meta}>
-                    {more.length} event{more.length === 1 ? "" : "s"}
-                    {filter !== "all" ? ` in ${categoryLabel(filter)}` : ""}
-                  </p>
-                </div>
-                {more.length ? (
-                  <>
-                    <div className={ui.grid3}>{more.slice(0, moreCount).map((e) => card(e, undefined, "small"))}</div>
-                    {more.length > moreCount ? (
-                      <div className={styles.moreRow}>
-                        <button type="button" className="pill alt" onClick={() => setMoreCount((n) => n + MORE_PAGE)}>
-                          Show more events <span aria-hidden="true">●</span>
-                        </button>
+              {/* Nothing more to list (and no filter to clear): skip the empty "More events" block. */}
+              {more.length || filter !== "all" ? (
+                <section
+                  className={ui.blockRule}
+                  aria-labelledby="more-events-title"
+                >
+                  <div className={ui.sectionHead}>
+                    <h2 id="more-events-title" className={ui.sectionTitle}>
+                      {ranked ? "More events" : "Upcoming near you"}
+                    </h2>
+                    <p className={ui.meta}>
+                      {more.length} event{more.length === 1 ? "" : "s"}
+                      {filter !== "all" ? ` in ${categoryLabel(filter)}` : ""}
+                    </p>
+                  </div>
+                  {more.length ? (
+                    <>
+                      <div className={ui.grid3}>
+                        {more
+                          .slice(0, moreCount)
+                          .map((e) => card(e, undefined, "small"))}
                       </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className={ui.status}>
-                    {filter === "all" ? "That's everything for now." : `Nothing else in ${categoryLabel(filter)} right now.`}{" "}
-                    {filter !== "all" ? (
-                      <button type="button" className={ui.textButton} onClick={() => setFilter("all")}>
-                        Show all
-                      </button>
-                    ) : null}
-                  </p>
-                )}
-              </section>
+                      {more.length > moreCount ? (
+                        <div className={styles.moreRow}>
+                          <button
+                            type="button"
+                            className="pill alt"
+                            onClick={() => setMoreCount((n) => n + MORE_PAGE)}
+                          >
+                            Show more events <span aria-hidden="true">●</span>
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className={ui.status}>
+                      {filter === "all"
+                        ? "That's everything for now."
+                        : `Nothing else in ${categoryLabel(filter)} right now.`}{" "}
+                      {filter !== "all" ? (
+                        <button
+                          type="button"
+                          className={ui.textButton}
+                          onClick={() => setFilter("all")}
+                        >
+                          Show all
+                        </button>
+                      ) : null}
+                    </p>
+                  )}
+                </section>
+              ) : null}
             </>
           )}
         </>
