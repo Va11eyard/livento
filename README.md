@@ -42,7 +42,7 @@ All optional. See `.env.example` for comments.
 | --- | --- | --- |
 | `TICKETMASTER_API_KEY` | Live concerts, theatre and more, with prices and on-sale dates | Labeled sample events (sports stay live via TheSportsDB) |
 | `ANTHROPIC_API_KEY` | Ask Livento, picks re-ranking and "why" lines, roadmap wording, quotes, merchant categories (`claude-opus-5-5`) | Gemini if set; otherwise rule order and templates, and Ask Livento shows "not connected" |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` (optional, default `gemini-3.8-flash`) | Backup AI for the same features when Claude is missing or fails for account reasons (Claude is skipped for 10 minutes); web event search via Grounding with Google Search (paid tier only) | Claude only |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` (optional, default `gemini-3.6-flash`) | Backup AI for the same features when Claude is missing or fails for account reasons (Claude is skipped for 10 minutes); web event search via Grounding with Google Search (paid tier only) | Claude only |
 | `STRIPE_SECRET_KEY` | Wallet (add money, auto-save, withdraw) and Premium checkout. `sk_test_…` only; live keys are refused | Wallet shows "not connected"; Premium via Demo unlock |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | Telegram bot | Telegram features hidden |
 | `RESEND_API_KEY`, `ALERTS_FROM_EMAIL` | Email alerts | Email alerts hidden |

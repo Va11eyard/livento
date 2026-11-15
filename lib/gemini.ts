@@ -6,7 +6,7 @@
  * - REST `POST /v1beta/models/{model}:generateContent` through fetch (no SDK).
  *   The key travels only in the `x-goog-api-key` header: never in a URL, a log
  *   line or an error message.
- * - Model `gemini-3.8-flash` (stable, has a free tier; function calling,
+ * - Model `gemini-3.6-flash` (stable, has a free tier; function calling,
  *   Grounding with Google Search and structured outputs). `GEMINI_MODEL`
  *   overrides it.
  * - `GEMINI_API_BASE` is honoured only for loopback hosts (local mock tests);
