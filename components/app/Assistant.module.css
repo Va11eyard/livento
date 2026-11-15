@@ -18,14 +18,14 @@
   border: 1px solid var(--ink);
   border-radius: var(--radius-pill);
   background: var(--ink);
-  color: #fff;
+  color: var(--paper);
   font: 650 15px/1 var(--font-ui);
   transition: background 0.15s ease, color 0.15s ease;
 }
 .launcher:hover,
 .launcher[data-state="open"] {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
 }
 
 .launcherDot {
@@ -33,11 +33,13 @@
   height: 10px;
   border-radius: 50%;
   background: var(--yellow);
+  /* a dark rim keeps the dot visible on the light night-theme launcher */
+  box-shadow: 0 0 0 1px light-dark(transparent, var(--on-accent));
   transition: background 0.15s ease;
 }
 .launcher:hover .launcherDot,
 .launcher[data-state="open"] .launcherDot {
-  background: var(--ink);
+  background: var(--on-accent);
 }
 
 /* Side panel ---------------------------------------------------------------- */
@@ -46,7 +48,7 @@
   position: fixed;
   inset: 0;
   z-index: 70;
-  background: #14141470;
+  background: var(--backdrop);
 }
 
 .panel {
@@ -61,7 +63,7 @@
   width: min(460px, 100vw);
   padding: 24px 24px 14px;
   border-left: 1px solid var(--ink);
-  background: #fff;
+  background: var(--paper);
 }
 .panel:focus {
   outline: none;
@@ -94,13 +96,14 @@
   height: 44px;
   border: 1px solid var(--ink);
   border-radius: 50%;
-  background: #fff;
+  background: var(--paper);
   color: var(--ink);
   font: 400 26px/1 var(--font-ui);
   transition: background 0.15s ease;
 }
 .close:hover {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 
 /* Chat ------------------------------------------------------------------------ */
@@ -143,6 +146,7 @@
 }
 .toolLink:hover {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 .toolLink:disabled {
   opacity: 0.45;
@@ -206,7 +210,7 @@
   align-self: flex-end;
   border-bottom-right-radius: 6px;
   background: var(--ink);
-  color: #fff;
+  color: var(--paper);
   white-space: pre-wrap;
 }
 
@@ -245,7 +249,7 @@
   padding: 5px 5px 5px 16px;
   border: 1px solid var(--ink);
   border-radius: 24px;
-  background: #fff;
+  background: var(--paper);
 }
 .composer:focus-within {
   outline: 3px solid var(--focus);

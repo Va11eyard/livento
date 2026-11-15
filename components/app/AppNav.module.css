@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0 0 auto;
   z-index: 40;
-  background: #fff;
+  background: var(--paper);
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -58,6 +58,12 @@
   min-height: 36px;
 }
 
+/* Light / night toggle (global .theme-toggle), sized like the links. Two classes: wins either load order. */
+.nav .theme {
+  min-height: 0;
+  padding-block: 6px;
+}
+
 /* "Profile" link with the avatar (or initials on yellow) */
 .profile {
   display: inline-flex;
@@ -74,7 +80,7 @@
   border: 1px solid var(--ink);
   border-radius: 50%;
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
   font: 650 12px / 1 var(--font-ui);
   letter-spacing: -0.02em;
   object-fit: cover;
@@ -98,7 +104,7 @@
     position: absolute;
     inset: var(--nav-h) 0 auto;
     padding: 18px var(--gut) 22px;
-    background: #fff;
+    background: var(--paper);
     border-bottom: 1px solid var(--line);
     flex-direction: column;
     align-items: flex-start;
@@ -107,7 +113,8 @@
   .nav.open {
     display: flex;
   }
-  .link {
+  .link,
+  .nav .theme {
     font-size: 18px;
   }
 }

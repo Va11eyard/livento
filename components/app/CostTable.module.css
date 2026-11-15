@@ -54,7 +54,7 @@
   padding: 8px 10px;
   border: 1px solid var(--ink);
   border-radius: 10px;
-  background: #fff;
+  background: var(--paper);
   font-variant-numeric: tabular-nums;
 }
 
@@ -121,6 +121,7 @@
 }
 .reset:hover:not(:disabled) {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 .reset:disabled {
   color: var(--ink-soft);

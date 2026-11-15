@@ -12,7 +12,7 @@
   position: fixed;
   inset: 0 0 auto;
   z-index: 10;
-  background: #fff;
+  background: var(--paper);
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -44,6 +44,11 @@
   display: none;
   border: 0;
   background: transparent;
+}
+
+/* Light / night toggle (global .theme-toggle): the same height as the links beside it. */
+.lv-landing .nav nav .theme-toggle {
+  min-height: 0;
 }
 
 /* ------------------------------------------------------------------ hero */
@@ -91,7 +96,7 @@
   font: 600 clamp(80px, min(15vw, 21vh), 210px) / 0.93 var(--font-display);
   letter-spacing: -0.06em;
   text-transform: uppercase;
-  color: #090909;
+  color: light-dark(#090909, var(--ink));
   transform: skewX(-12deg);
   transform-origin: left bottom;
 }
@@ -257,7 +262,7 @@
 .lv-landing .intro-card span {
   display: block;
   text-align: right;
-  color: #181818;
+  color: light-dark(#181818, var(--ink));
   font: 650 12px / 1.6 var(--font-ui);
   text-transform: uppercase;
 }
@@ -322,12 +327,12 @@
   top: 9px;
   left: 11px;
   border-block: 5px solid transparent;
-  border-left: 8px solid var(--ink);
+  border-left: 8px solid var(--on-accent);
   transition: border-color 0.15s ease;
 }
 
 .lv-landing .experiment button:hover i {
-  background: var(--ink);
+  background: var(--on-accent);
 }
 
 .lv-landing .experiment button:hover i::before {
@@ -542,8 +547,13 @@
 
 /* ------------------------------------------------- 03 how it works (dark) */
 
+/* Dark in both themes. At night it goes a shade deeper than the page, with hairline edges, so the
+   white / surface / dark / white / yellow rhythm stays. */
 .lv-landing .dark {
-  background: var(--ink);
+  background: light-dark(var(--ink), #0a0a09);
+  box-shadow:
+    inset 0 1px light-dark(transparent, var(--line)),
+    inset 0 -1px light-dark(transparent, var(--line));
   color: #fff;
 }
 
@@ -634,8 +644,15 @@
 
 /* ------------------------------------------------------- footer (yellow) */
 
+/* Yellow in both themes, with the light palette on it: dark text, the black and white pills. */
 .lv-landing .foot {
+  --ink: var(--on-accent);
+  --ink-soft: #616161;
+  --paper: #ffffff;
+  --focus: #3461ff;
+  color-scheme: light;
   background: var(--yellow);
+  color: var(--ink);
 }
 
 /* 05: one big statement across the width, then the copy (left) and every action in one row (right). */
@@ -685,7 +702,7 @@
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: #14141470;
+  background: var(--backdrop);
 }
 
 .lv-landing .wish {
@@ -698,7 +715,7 @@
   overflow: auto;
   transform: translate(-50%, -50%);
   border: 1px solid var(--ink);
-  background: #fff;
+  background: var(--paper);
   color: var(--ink);
   padding: 32px;
 }
@@ -723,6 +740,7 @@
   padding: 10px;
   border: 1px solid var(--ink);
   border-radius: 12px;
+  background: var(--paper);
   resize: vertical;
 }
 
@@ -732,7 +750,7 @@
   min-height: 44px;
   margin: -12px -12px 0 0;
   border: 0;
-  background: #fff;
+  background: var(--paper);
   font-size: 27px;
   line-height: 1;
 }
@@ -752,7 +770,7 @@
     position: absolute;
     inset: var(--nav-h) 0 auto;
     padding: 18px var(--gut);
-    background: #fff;
+    background: var(--paper);
     border-bottom: 1px solid var(--line);
     align-items: flex-start;
   }

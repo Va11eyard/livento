@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 /** Fixed landing header. Below 992px the links collapse behind a "Menu" toggle. */
 export default function LandingNav() {
@@ -48,6 +49,7 @@ export default function LandingNav() {
           <a href="#pricing" onClick={close}>
             Pricing
           </a>
+          <ThemeToggle />
           <Link href="/onboarding" onClick={close}>
             Start
           </Link>

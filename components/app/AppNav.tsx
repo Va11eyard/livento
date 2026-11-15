@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Avatar } from "@/app/profile/Avatar";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { socialOf, useAppState, useHydrated, useProfileMedia } from "@/lib/storage";
 import styles from "./AppNav.module.css";
 
@@ -95,6 +96,7 @@ export function AppNav() {
                 {link.label}
               </Link>
             ))}
+            <ThemeToggle className={styles.theme} />
             {hasProfile ? (
               <Link
                 href="/profile"

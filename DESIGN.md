@@ -24,8 +24,37 @@ scoped under `.lv-landing`; app screens use CSS modules plus the shared utilitie
 | `--line-soft` | `#dededd` | header border |
 | `--focus` | `#3461ff` | focus ring only (3px, 4px offset) |
 | `--ok` / `--warn` / `--danger` | `#1f7a3d` / `#8a5a00` / `#b3261e` | status text only, sparingly |
+| `--on-accent` | `#141414` | text and hairlines on yellow, in both themes |
+| `--backdrop` | `#14141470` | dialog / panel backdrop |
 
 Monochrome first. Yellow is used for emphasis, never as body text color.
+
+## Night theme
+Light is the default. Night applies through `:root[data-theme="dark"]` (the "Night" / "Light" toggle in both
+headers saves `localStorage["livento:theme"]`; an inline `<head>` script in `app/layout.tsx` sets it before the
+first paint), or, with nothing saved, through `prefers-color-scheme: dark`. Both blocks in `app/globals.css` hold
+the same values and set `color-scheme: dark`.
+
+| Token | Night |
+|---|---|
+| `--ink` / `--ink-soft` | `#f2f2ef` / `#a3a39e` |
+| `--paper` / `--surface` | `#111110` / `#1c1c1a` |
+| `--line` / `--line-soft` | `#383835` / `#2a2a28` |
+| `--focus` | `#4d74ff` (also clears 3:1 on yellow) |
+| `--ok` / `--warn` / `--danger` | `#5cc27e` / `#e0a440` / `#ff7a6e` |
+| `--backdrop` | `#000000a6` |
+| `--yellow`, `--on-accent` | unchanged |
+
+- **On-accent rule:** anything drawn on yellow (pill hover, `.tag.estimate`, highlights, the progress fill edge,
+  avatar initials, the yellow poster) uses `--on-accent` for its text and hairlines, never `--ink` (which turns
+  light at night). Yellow areas that hold other UI (the landing and app footers) re-declare the light palette
+  (`--ink`, `--ink-soft`, `--paper`, `--focus`), so they look the same in both themes.
+- Surfaces and text use `--paper` / `--ink`, never a hardcoded `#fff` / `#141414`. A one-off color that must
+  differ by theme uses `light-dark(light, night)`, which follows `color-scheme`.
+- At night the primary pill inverts (light fill, dark text; hover stays yellow with `--on-accent`), toasts and
+  the chat's user bubble invert, the landing's dark band stays dark (`#0a0a09` with `--line` hairlines), ink
+  posters become `--surface` with a hairline so the yellow kicker reads, and the profile quote's highlight
+  covers the whole line. The Google Maps iframe has no dark mode and stays light.
 
 ## Typography
 | Role | Font | Spec |
@@ -41,7 +70,7 @@ Fonts are bundled in `public/assets/fonts` with their licenses in `public/assets
 
 ## Layout
 - Container `.wrap`: `min(1200px, 100% − 2 × clamp(20px, 4.5vw, 72px))`.
-- Fixed header 59px, white, 1px `--line-soft` bottom border; brand left, nav right; "Menu" toggle below 992px.
+- Fixed header 59px, `--paper`, 1px `--line-soft` bottom border; brand left, nav right (the light / night toggle sits just before the last item); "Menu" toggle below 992px.
 - Sections `.section`: vertical padding `clamp(55px, 7vw, 102px)` with a 1px top rule.
 - Section rhythm on the landing: white → `--surface` (works grid) → `--ink` (dark accordion) → white → `--yellow` footer.
 - Breakpoints: 991px (nav collapses), 767px (single column). Verify at 390×844, 768×1024, 1440×900.
@@ -54,7 +83,7 @@ Fonts are bundled in `public/assets/fonts` with their licenses in `public/assets
 - **Tags** `.tag`: tiny uppercase pills — `estimate` (yellow), `sample` (dashed, surface), `premium` (ink).
 - **Form fields** `.field`: 1px ink border, 12px radius, 44px min height, label above in TASA 650 14px, `.help` text below.
 - **Progress** (envelopes): 10px tall track `--surface` with ink outline, fill `--yellow` with ink right edge; show "$X of $Y" beside it.
-- **Dialog**: 1px ink border, 32px padding, `min(470px, 90vw)`, backdrop `#14141470`.
+- **Dialog**: 1px ink border, 32px padding, `min(470px, 90vw)`, backdrop `--backdrop`.
 - Interactive behavior comes from Radix UI Primitives (Dialog, Accordion, Progress, Slider, Toggle Group, Tabs, Toast), styled through `data-state` attributes. No Tailwind, no other UI kit.
 
 ## Motion

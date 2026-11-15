@@ -25,7 +25,7 @@
 }
 
 :root {
-  /* color */
+  /* color (light theme; night overrides below) */
   --ink: #141414;
   --ink-soft: #616161;
   --paper: #ffffff;
@@ -37,6 +37,10 @@
   --ok: #1f7a3d;
   --warn: #8a5a00;
   --danger: #b3261e;
+  --backdrop: #14141470;
+  /* Text and hairlines drawn on yellow: dark in both themes (--ink turns light at night). */
+  --on-accent: #141414;
+  color-scheme: light;
 
   /* type */
   --font-display: Oswald, Impact, sans-serif;
@@ -55,6 +59,44 @@
   background: var(--paper);
   scroll-behavior: smooth;
   scroll-padding-top: 72px;
+}
+
+/*
+ * Night theme: the same monochrome brand, inverted; yellow stays. Applied by an explicit choice
+ * (data-theme="dark", set by lib/theme.ts) or, with no choice saved, by the system setting.
+ * Keep the two blocks identical. One-off colors elsewhere use light-dark(), which follows the
+ * color-scheme set here.
+ */
+:root[data-theme="dark"] {
+  --ink: #f2f2ef;
+  --ink-soft: #a3a39e;
+  --paper: #111110;
+  --surface: #1c1c1a;
+  --line: #383835;
+  --line-soft: #2a2a28;
+  --focus: #4d74ff;
+  --ok: #5cc27e;
+  --warn: #e0a440;
+  --danger: #ff7a6e;
+  --backdrop: #000000a6;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #f2f2ef;
+    --ink-soft: #a3a39e;
+    --paper: #111110;
+    --surface: #1c1c1a;
+    --line: #383835;
+    --line-soft: #2a2a28;
+    --focus: #4d74ff;
+    --ok: #5cc27e;
+    --warn: #e0a440;
+    --danger: #ff7a6e;
+    --backdrop: #000000a6;
+    color-scheme: dark;
+  }
 }
 
 *,
@@ -129,6 +171,7 @@ textarea:focus-visible,
   z-index: 50;
   padding: 12px;
   background: var(--yellow);
+  color: var(--on-accent);
 }
 .skip:focus {
   top: 12px;
@@ -191,7 +234,7 @@ textarea:focus-visible,
   gap: 20px;
   border: 1px solid var(--ink);
   background: var(--ink);
-  color: #fff;
+  color: var(--paper);
   border-radius: var(--radius-pill);
   font: 650 15px/1 var(--font-ui);
   padding: 13px 18px;
@@ -203,7 +246,7 @@ textarea:focus-visible,
   font-size: 15px;
 }
 .pill.alt {
-  background: #fff;
+  background: var(--paper);
   color: var(--ink);
 }
 .pill.alt span {
@@ -211,7 +254,7 @@ textarea:focus-visible,
 }
 .pill:hover {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
 }
 .pill:disabled,
 .pill[aria-disabled="true"] {
@@ -220,7 +263,7 @@ textarea:focus-visible,
 }
 .pill:disabled:hover {
   background: var(--ink);
-  color: #fff;
+  color: var(--paper);
 }
 .pill.small {
   min-height: 36px;
@@ -244,6 +287,7 @@ textarea:focus-visible,
 }
 .tag.estimate {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 .tag.sample {
   background: var(--surface);
@@ -251,7 +295,7 @@ textarea:focus-visible,
 }
 .tag.premium {
   background: var(--ink);
-  color: #fff;
+  color: var(--paper);
 }
 
 /* Form controls */
@@ -270,7 +314,7 @@ textarea:focus-visible,
   width: 100%;
   border: 1px solid var(--ink);
   border-radius: 12px;
-  background: #fff;
+  background: var(--paper);
   padding: 11px 14px;
   min-height: 44px;
 }
@@ -280,6 +324,53 @@ textarea:focus-visible,
 .help {
   font-size: 13px;
   color: var(--ink-soft);
+}
+
+/* Light / night switch (components/ThemeToggle.tsx): a text button like the nav links. It shows
+   the theme it switches to; the other label is hidden by the same rules as the night tokens. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 650 15px var(--font-ui);
+  white-space: nowrap;
+}
+.theme-toggle > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.theme-toggle svg {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.theme-toggle:hover > span {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.theme-toggle .theme-to-light,
+:root[data-theme="dark"] .theme-toggle .theme-to-dark {
+  display: none;
+}
+:root[data-theme="dark"] .theme-toggle .theme-to-light {
+  display: inline-flex;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .theme-to-dark {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .theme-toggle .theme-to-light {
+    display: inline-flex;
+  }
 }
 
 /* Visually hidden but available to screen readers */

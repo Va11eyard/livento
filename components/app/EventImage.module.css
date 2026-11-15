@@ -18,14 +18,16 @@
   overflow: hidden;
 }
 
+/* Stays a dark poster at night (surface with a hairline edge), so the yellow kicker still reads. */
 .ink {
-  background: var(--ink);
-  color: var(--paper);
+  background: light-dark(var(--ink), var(--surface));
+  color: light-dark(var(--paper), var(--ink));
+  box-shadow: inset 0 0 0 1px light-dark(transparent, var(--line-soft));
 }
 
 .yellow {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
 }
 
 .kicker {

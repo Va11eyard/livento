@@ -48,7 +48,7 @@
 /* General balance ("Add money"): outlined in ink so it reads first, above the goals. */
 .addCard {
   border: 1px solid var(--ink);
-  background: #fff;
+  background: var(--paper);
 }
 
 .addBalance {
@@ -90,13 +90,14 @@
   flex: none;
   border: 1px solid var(--ink);
   border-radius: var(--radius-pill);
-  background: #fff;
+  background: var(--paper);
   min-height: 36px;
   padding: 6px 14px;
   font: 650 14px var(--font-ui);
 }
 .delete:hover {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 
 .cardBody {
@@ -190,7 +191,7 @@
   padding: clamp(20px, 3vw, 32px);
   border: 1px solid var(--ink);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--paper);
 }
 
 .otherRow {

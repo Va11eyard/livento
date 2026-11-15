@@ -1,5 +1,12 @@
+/* Yellow in both themes, with the light palette on it (dark text, readable credits). */
 .footer {
+  --ink: var(--on-accent);
+  --ink-soft: #616161;
+  --paper: #ffffff;
+  --focus: #3461ff;
+  color-scheme: light;
   background: var(--yellow);
+  color: var(--ink);
 }
 
 .inner {

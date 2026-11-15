@@ -270,7 +270,7 @@
   position: absolute;
   height: 100%;
   background: var(--yellow);
-  box-shadow: inset -1px 0 0 var(--ink);
+  box-shadow: inset -1px 0 0 var(--on-accent);
 }
 
 .sliderThumb {
@@ -279,7 +279,7 @@
   height: 28px;
   border: 1px solid var(--ink);
   border-radius: 50%;
-  background: #fff;
+  background: var(--paper);
   cursor: grab;
   transition: background 0.15s ease;
 }
@@ -305,7 +305,7 @@
   padding: clamp(20px, 3vw, 28px);
   border: 1px solid var(--ink);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--paper);
 }
 
 .freesLabel {

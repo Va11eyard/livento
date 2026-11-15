@@ -16,7 +16,7 @@
   padding: clamp(20px, 2.6vw, 28px);
   border: 1px solid var(--ink);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--paper);
 }
 
 .kicker {

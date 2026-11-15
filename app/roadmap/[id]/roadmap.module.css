@@ -99,6 +99,7 @@
 }
 .trigger[data-state="open"] .when {
   background: var(--yellow);
+  color: var(--on-accent);
   border-radius: 4px;
   padding: 1px 6px;
   justify-self: start;

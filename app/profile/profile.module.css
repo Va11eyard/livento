@@ -40,7 +40,7 @@
   border-radius: 50%;
   box-shadow: 0 0 0 5px var(--paper); /* white ring against the cover (no blur, not a drop shadow) */
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
   font: 650 calc(var(--avatar) * 0.36) / 1 var(--font-ui);
   letter-spacing: -0.04em;
   object-fit: cover;
@@ -135,8 +135,14 @@
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
+/* Marker highlight; at night it covers the whole line so the text on it can stay dark, and reaches
+   a little past each line end (the tight tracking lets "." and the closing quote overhang). */
 .quoteText span {
-  background: linear-gradient(transparent 62%, var(--yellow) 62%);
+  background: linear-gradient(light-dark(transparent, var(--yellow)) 62%, var(--yellow) 62%);
+  box-shadow:
+    0.12em 0 light-dark(transparent, var(--yellow)),
+    -0.06em 0 light-dark(transparent, var(--yellow));
+  color: var(--on-accent);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
@@ -183,6 +189,7 @@
 }
 .goalName:hover {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 
 .plan {
@@ -194,6 +201,7 @@
 }
 .plan:hover .planName {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 
 .planDate {
@@ -306,7 +314,7 @@
   border: 1px solid var(--ink);
   border-radius: 50%;
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
   font: 650 26px / 1 var(--font-ui);
   letter-spacing: -0.04em;
   object-fit: cover;

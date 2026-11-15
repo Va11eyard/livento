@@ -20,10 +20,11 @@
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px 14px 18px;
-  border: 1px solid var(--ink);
+  /* the light night-theme toast keeps a dark edge where it overlaps the yellow footer */
+  border: 1px solid light-dark(var(--ink), var(--on-accent));
   border-radius: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--paper);
   transition: opacity 0.15s ease;
 }
 .toast[data-state="closed"] {
@@ -48,27 +49,28 @@
 
 .description {
   font-size: 14px;
-  color: #ddd;
+  color: light-dark(#ddd, #4a4a47);
 }
 
 .close {
   flex: none;
   width: 28px;
   height: 28px;
-  border: 1px solid #fff;
+  border: 1px solid var(--paper);
   border-radius: 50%;
   background: transparent;
-  color: #fff;
+  color: var(--paper);
   font-size: 18px;
   line-height: 1;
 }
 .close:hover {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
   border-color: var(--yellow);
 }
+/* On the light night-theme toast a yellow ring would vanish. */
 .close:focus-visible {
-  outline-color: var(--yellow);
+  outline-color: light-dark(var(--yellow), var(--focus));
 }
 
 @media (max-width: 767px) {

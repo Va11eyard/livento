@@ -59,7 +59,7 @@
 }
 
 .outline {
-  background: #fff;
+  background: var(--paper);
   border: 1px solid var(--ink);
   border-radius: var(--radius);
   padding: clamp(20px, 3vw, 32px);
@@ -99,7 +99,7 @@
   padding: 14px 18px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--paper);
   font-size: 15px;
 }
 .notice p {
@@ -142,6 +142,7 @@
 }
 .textButton:hover {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 
 .inlineLink {
@@ -150,6 +151,7 @@
 }
 .inlineLink:hover {
   background: var(--yellow);
+  color: var(--on-accent);
 }
 
 /* Empty / no-profile state ------------------------------------------------ */
@@ -180,24 +182,24 @@
   padding: 8px 16px;
   border: 1px solid var(--ink);
   border-radius: var(--radius-pill);
-  background: #fff;
+  background: var(--paper);
   font: 650 14px/1.1 var(--font-ui);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .chip:hover {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
 }
 .chip[data-state="on"],
 .chip[aria-pressed="true"] {
   background: var(--ink);
-  color: #fff;
+  color: var(--paper);
 }
 .chip[data-state="on"]:hover,
 .chip[aria-pressed="true"]:hover {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-accent);
 }
 .chip[data-state="on"]::before,
 .chip[aria-pressed="true"]::before {

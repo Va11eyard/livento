@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { THEME_COLOR, THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 // Absolute base for Open Graph / Twitter image URLs. On Vercel, the production
@@ -35,13 +36,22 @@ export const metadata: Metadata = {
   },
 };
 
+// Browser bar per system scheme; an explicit light/night choice overrides it (lib/theme.ts).
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: THEME_COLOR.light },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLOR.dark },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    // The inline script sets data-theme on <html> before the first paint (a saved light/night
+    // choice), so React must accept that attribute on hydration.
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );
