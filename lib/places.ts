@@ -168,7 +168,7 @@ export async function findPlaces(
   at: LatLng,
   opts: { radiusMeters?: number; cuisine?: string; limit?: number } = {},
 ): Promise<Place[]> {
-  const radius = Math.min(5_000, Math.max(300, Math.round(opts.radiusMeters ?? 1_600)));
+  const radius = Math.min(8_000, Math.max(300, Math.round(opts.radiusMeters ?? 1_600)));
   const limit = Math.min(8, Math.max(1, opts.limit ?? 6));
   const cuisine = opts.cuisine?.toLowerCase().replace(/[^a-z -]/g, "").trim().slice(0, 30) || undefined;
   const key = `places:v2:${kind}:${at.lat.toFixed(3)},${at.lng.toFixed(3)}:${radius}:${cuisine ?? ""}`;

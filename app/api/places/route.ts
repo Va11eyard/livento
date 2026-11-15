@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
     const at =
       q.lat !== undefined && q.lng !== undefined ? { lat: q.lat, lng: q.lng } : await geocode(q.near ?? "", q.city, q.state);
     if (!at) return json({ places: [] });
-    const places = await findPlaces(q.kind, at, { radiusMeters: q.radius ?? 3_000, limit: 6 });
+    let places = await findPlaces(q.kind, at, { radiusMeters: q.radius ?? 3_000, limit: 6 });
+    // Quiet neighborhoods (e.g. gardens outside downtown): widen once before giving up.
+    if (places.length === 0 && !q.radius) places = await findPlaces(q.kind, at, { radiusMeters: 8_000, limit: 6 });
     return json({ places }, 200, { "Cache-Control": "public, max-age=3600" });
   } catch {
     return apiError("Map data is unavailable right now.", 503);
