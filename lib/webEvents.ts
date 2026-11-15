@@ -58,7 +58,7 @@ const CITY_TTL_SECONDS = 30 * 86_400;
 const EVENT_TTL_MAX_SECONDS = 30 * 86_400;
 const FRESH_MS_REDIS = 7 * DAY_MS;
 const FRESH_MS_MEMORY = 12 * 3_600_000;
-const CRON_SKIP_MS = 20 * 3_600_000;
+const CRON_SKIP_MS = 72 * 3_600_000; // cities with events are refreshed every 3 days
 const FAILED_RETRY_MS = 2 * 60_000;
 const MEMO_MS = 60_000;
 const DAILY_SEARCH_CAP = 150; // on-demand searches per day, all visitors together
@@ -458,7 +458,7 @@ export async function searchWebEvents(q: WebEventsQuery, opts: { ip?: string } =
   }
 }
 
-/** Daily refresh of one city for the default categories (cron). Skips cities refreshed with events in the last 20 hours. */
+/** Daily refresh of one city for the default categories (cron). Skips cities refreshed with events in the last 3 days. */
 export async function refreshCityWebEvents(
   cityName: string,
   state?: string,

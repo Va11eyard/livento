@@ -15,7 +15,7 @@ export const maxDuration = 60;
  *
  * Fans out one POST per city to /api/cron/events/city, so every search runs in
  * its own function with its own time budget (never one long sequential call).
- * Cities refreshed in the last 20 hours are skipped there. Cost per run: at most
+ * Cities refreshed with events in the last 3 days are skipped there. Cost per run: at most
  * one Claude request with up to 4 web searches per city.
  */
 export async function GET(request: NextRequest) {
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     maxWebSearchesPerCity: MAX_WEB_SEARCHES,
     maxWebSearchesThisRun: queued * MAX_WEB_SEARCHES,
     storage: isKvConfigured() ? "redis" : "memory",
-    note: "Each city searches in its own function; cities refreshed in the last 20 hours are skipped.",
+    note: "Each city searches in its own function; cities refreshed with events in the last 3 days are skipped.",
     cities,
   });
 }

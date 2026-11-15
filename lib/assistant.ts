@@ -120,7 +120,8 @@ function classify(err: unknown): AssistantErrorKind {
     err instanceof Anthropic.AuthenticationError ||
     err instanceof Anthropic.PermissionDeniedError ||
     err instanceof Anthropic.NotFoundError ||
-    err instanceof Anthropic.APIConnectionError
+    err instanceof Anthropic.APIConnectionError ||
+    (err instanceof Anthropic.BadRequestError && /credit balance/i.test(String(err.message)))
   ) {
     return "unavailable";
   }
