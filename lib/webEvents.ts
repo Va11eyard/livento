@@ -1,7 +1,7 @@
 /**
  * Real upcoming events found by Claude's web search (server-only).
  *
- * Claude (`claude-opus-5-5`, effort low) runs the `web_search_20260209` server
+ * Claude (`claude-opus-5-5`, effort medium) runs the `web_search_20260209` server
  * tool (at most 4 searches) and answers with a structured list (JSON schema).
  * We fetch nothing ourselves. Every event is validated here and dropped unless
  * it has an https URL whose host appeared in this request's
@@ -46,7 +46,7 @@ export const MAX_WEB_SEARCHES = 4;
 export const CRON_CITIES: readonly City[] = US_CITIES.slice(0, 15);
 
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
-const SEARCH_TIMEOUT_MS = 45_000;
+const SEARCH_TIMEOUT_MS = 80_000;
 const MAX_TOKENS = 16_000;
 const MAX_CONTINUATIONS = 2; // pause_turn resumes per request
 const MAX_EVENTS = 12; // per on-demand search
@@ -458,7 +458,7 @@ export async function searchWebEvents(q: WebEventsQuery, opts: { ip?: string } =
   }
 }
 
-/** Daily refresh of one city for the default categories (cron). Skips cities refreshed in the last 20 hours. */
+/** Daily refresh of one city for the default categories (cron). Skips cities refreshed with events in the last 20 hours. */
 export async function refreshCityWebEvents(
   cityName: string,
   state?: string,
@@ -473,7 +473,8 @@ export async function refreshCityWebEvents(
     const cov = doc?.coverage[c];
     return cov !== undefined && now - cov.at < CRON_SKIP_MS;
   });
-  if (recent) return { city: label, status: "skipped", events: doc?.events.length ?? 0 };
+  // An empty result doesn't count as fresh: try again on the next run.
+  if (recent && (doc?.events.length ?? 0) > 0) return { city: label, status: "skipped", events: doc?.events.length ?? 0 };
   const updated = await (findRunning(place.key, DEFAULT_WEB_CATEGORIES) ??
     startSearch(place, DEFAULT_WEB_CATEGORIES, todayISO(), CRON_MAX_EVENTS));
   return { city: label, status: "refreshed", events: updated.events.length };
@@ -518,9 +519,9 @@ const WebEventsOutputSchema = z.object({ events: z.array(WebEventItemSchema) });
 
 const SYSTEM = [
   "You find real upcoming live events in US cities for Livento, an app that helps people plan and save for live experiences.",
-  "Use the web_search tool for a few targeted searches (official venue, promoter and ticketing pages, city event calendars), then answer.",
+  "Use web_search for a few targeted searches (venue calendars, promoter and ticketing pages, city event guides and 'things to do this month' lists). Search snippets often lack dates: then use web_fetch on one or two of the most promising listing pages from the results to read the actual dates, and build the list from what those pages show.",
   "Rules:",
-  "- Include an event only if you saw it in this turn's search results, with a specific date and the https URL of the search-result page that lists it.",
+  "- Include an event only if a page you saw in this turn (a search result or a page you fetched) shows it with a specific date. url: the https URL of that page (use the listing page's URL when you read the event there).",
   "- Never invent or guess events, dates, times, venues, prices or URLs. Leave an optional field out when the page doesn't show it; leave the event out when its date or page is unclear.",
   "- Only events in or near the requested city (its metro area), between the requested dates, in the requested categories. Use exactly one of the given category keys per event.",
   "- priceMin and priceMax: only when the page or snippet shows a ticket price in US dollars (0 only when it says the event is free). Never estimate a price.",
@@ -552,6 +553,14 @@ function userPrompt(input: SearchInput, plainJson: boolean): string {
   if (plainJson) lines.push(PLAIN_JSON_RULE);
   return lines.join("\n");
 }
+
+/** Reads one or two listing pages from the search results (it can only open URLs already in the conversation). */
+const WEB_FETCH_TOOL = {
+  type: "web_fetch_20260209" as const,
+  name: "web_fetch" as const,
+  max_uses: 2,
+  max_content_tokens: 12_000,
+};
 
 function webSearchTool(place: Place) {
   return {
@@ -605,6 +614,13 @@ function absorb(
   usage: { input_tokens: number; output_tokens: number; server_tool_use?: { web_search_requests: number } | null },
 ): void {
   for (const block of content) {
+    // Pages read with web_fetch count as seen too (web_fetch only opens URLs from the search results).
+    if (block.type === "web_fetch_tool_result") {
+      const url = (block as { content?: { url?: unknown } }).content?.url;
+      const host = typeof url === "string" ? hostOf(url) : null;
+      if (host) turn.hosts.add(host);
+      continue;
+    }
     // A failed search returns an error object instead of a list: nothing to collect.
     if (block.type !== "web_search_tool_result" || !Array.isArray(block.content)) continue;
     for (const result of block.content) {
@@ -652,8 +668,8 @@ async function converse(
           fallbacks: "default",
           system: SYSTEM,
           messages,
-          tools: [tool],
-          output_config: { effort: "low", format: betaZodOutputFormat(WebEventsOutputSchema) },
+          tools: [tool, WEB_FETCH_TOOL],
+          output_config: { effort: "medium", format: betaZodOutputFormat(WebEventsOutputSchema) },
           ...(container ? { container } : {}),
         },
         options(),
@@ -679,9 +695,9 @@ async function converse(
         max_tokens: MAX_TOKENS,
         system: SYSTEM,
         messages,
-        tools: [tool],
+        tools: [tool, WEB_FETCH_TOOL],
         output_config:
-          mode === "ga" ? { effort: "low", format: zodOutputFormat(WebEventsOutputSchema) } : { effort: "low" },
+          mode === "ga" ? { effort: "medium", format: zodOutputFormat(WebEventsOutputSchema) } : { effort: "medium" },
         ...(container ? { container } : {}),
       },
       options(),

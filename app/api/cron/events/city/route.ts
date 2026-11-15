@@ -6,7 +6,7 @@ import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
 import { WebSearchError, refreshCityWebEvents } from "@/lib/webEvents";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const Body = z.object({
   city: z.string().trim().min(2).max(60),

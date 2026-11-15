@@ -7,7 +7,7 @@ import { WebSearchError, searchWebEvents } from "@/lib/webEvents";
 import { parseEventsQuery } from "../params";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const UNAVAILABLE = "We couldn't search the web right now. Please try again in a few minutes.";
 
