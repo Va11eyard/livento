@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     .split(",")
     .map((m) => m.trim())
     .filter((m) => /^[a-z0-9][a-z0-9.-]{1,80}$/i.test(m));
-  const candidates = [...new Set([process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash", ...wanted])].slice(0, 6);
+  const candidates = [...new Set([process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash", ...wanted])].slice(0, 6);
 
   const checks = await Promise.all(
     candidates.map(async (model) => {

@@ -16,7 +16,7 @@
  */
 import { z } from "zod";
 
-export const GEMINI_DEFAULT_MODEL = "gemini-3.8-flash";
+export const GEMINI_DEFAULT_MODEL = "gemini-3.6-flash"; // 3.8-flash timed out (>25 s) on this key on 2026-11-15; 3.6 answered in ~1 s
 const DEFAULT_BASE = "https://generativelanguage.googleapis.com";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
