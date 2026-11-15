@@ -1090,3 +1090,111 @@ async function searchWithGemini(
   }
   throw new WebSearchError("failed", "The web search request was rejected");
 }
+
+// ---------------------------------------------------------------------------
+// Operator import: real events researched by hand (each with its own official page)
+// ---------------------------------------------------------------------------
+
+const ImportItemSchema = z.object({
+  name: z.string().min(2).max(200),
+  category: z.enum(CATEGORIES),
+  date: z.string(),
+  time: z.string().optional(),
+  venue: z.string().max(160).optional(),
+  city: z.string().min(2).max(80),
+  state: z.string().max(2).optional(),
+  url: z.string().max(600),
+  image: z.string().max(800).optional(),
+  priceMin: z.number().optional(),
+  priceMax: z.number().optional(),
+});
+
+export interface ImportResult {
+  added: number;
+  skipped: number;
+  cities: Record<string, number>;
+}
+
+/**
+ * Adds researched events to the shared events database (same store as web search), merged
+ * into each city's document without touching its search coverage. Each event needs its own
+ * https page; `image` (https) is that page's own picture. Dates must be today to +365 days.
+ */
+export async function importWebEvents(items: unknown[]): Promise<ImportResult> {
+  const today = todayISO();
+  const last = addDays(today, 365);
+  const byCity = new Map<string, { place: Place; events: LiventoEvent[] }>();
+  let skipped = 0;
+  for (const raw of items) {
+    const parsed = ImportItemSchema.safeParse(raw);
+    if (!parsed.success) {
+      skipped++;
+      continue;
+    }
+    const item = parsed.data;
+    const date = item.date.trim();
+    const url = httpsUrl(item.url);
+    const host = url ? hostOf(url) : undefined;
+    const place = resolvePlace(item.city, item.state);
+    if (isoDatePart(date) !== date || date < today || date > last || !url || !host || !place) {
+      skipped++;
+      continue;
+    }
+    const image = item.image ? httpsUrl(item.image) : undefined;
+    let priceMin = cleanPrice(item.priceMin);
+    let priceMax = cleanPrice(item.priceMax);
+    if (priceMin !== undefined && priceMax !== undefined && priceMin > priceMax) [priceMin, priceMax] = [priceMax, priceMin];
+    const priced = priceMin !== undefined || priceMax !== undefined;
+    const time = cleanTime(item.time);
+    const venue = item.venue ? tidy(item.venue) : "";
+    const name = tidy(item.name);
+    const event: LiventoEvent = {
+      id: `web_${shortHash(`${url}|${date}|${place.key}|${norm(name)}`)}`,
+      source: "web",
+      name,
+      category: item.category,
+      date,
+      ...(time ? { time } : {}),
+      ...(venue ? { venue } : {}),
+      city: place.city,
+      ...(place.state ? { state: place.state } : {}),
+      ...(priceMin !== undefined ? { priceMin } : {}),
+      ...(priceMax !== undefined ? { priceMax } : {}),
+      ...(priced ? { currency: "USD", priceNote: `Price listed on ${host} — an estimate, check the official page` } : {}),
+      url,
+      ...(image ? { image, imageCredit: host } : {}),
+      attribution: host,
+      tags: [item.category],
+    };
+    const group = byCity.get(place.key) ?? { place, events: [] };
+    group.events.push(event);
+    byCity.set(place.key, group);
+  }
+
+  const cities: Record<string, number> = {};
+  let added = 0;
+  for (const [key, { place, events }] of byCity) {
+    await serialize(key, async () => {
+      mem.memo.delete(key);
+      const prev = await readCity(key);
+      const oldest = addDays(today, -1);
+      const kept = (prev?.events ?? []).filter((e) => (e.date ?? "") >= oldest);
+      const doc: CityDoc = {
+        v: 1,
+        city: place.city,
+        ...(place.state ? { state: place.state } : {}),
+        coverage: prev?.coverage ?? {},
+        events: dedupe([...events, ...kept]).sort(byDate).slice(0, CITY_EVENT_CAP),
+      };
+      const at = Date.now();
+      await Promise.all([
+        kvSet(cityKey(key), doc, CITY_TTL_SECONDS),
+        ...events.map((e) => kvSet(eventKey(e.id), e, eventTtlSeconds(e, at))),
+      ]);
+      remember(key, doc);
+    });
+    cities[[place.city, place.state].filter(Boolean).join(", ")] = events.length;
+    added += events.length;
+  }
+  return { added, skipped, cities };
+}
