@@ -29,7 +29,7 @@
  *
  * Gemini backup (lib/gemini.ts; provider choice in lib/llm.ts): when Claude is
  * unavailable, or fails for account reasons (e.g. credit balance too low) within
- * this same request, the same system prompt, the same five tools (as
+ * this same request, the same system prompt, the same six tools (as
  * functionDeclarations, zod schemas converted) and the same executors run on
  * Gemini: at most MAX_TOOL_ROUNDS rounds of function calls, then one answer with
  * function calling off. Links, the number check and cleaning are shared.
@@ -59,6 +59,7 @@ import {
   type GeminiPart,
 } from "./gemini";
 import { claudeFailedOver, claudeUsable, isClaudeAccountError, isLlmConfigured, LLM_MODEL } from "./llm";
+import { findPlaces, geocode, PLACE_KINDS } from "./places";
 import { randomQuote } from "./quotes";
 import { formatDate } from "./roadmap";
 import { scoreEvents, templateWhy } from "./score";
@@ -414,6 +415,22 @@ const TravelInput = z.object({
   guests: z.number().int().min(1).max(8).describe("Guests (default 1).").optional(),
 });
 
+const PlacesInput = z.object({
+  kind: z.enum(PLACE_KINDS).describe("What to look for: restaurant, cafe, bar, fast_food, dessert, museum, gallery, park, attraction, cinema, theatre, nightclub, bowling, zoo or aquarium."),
+  event_id: z.string().max(200).describe("A Livento event id: search around its venue (e.g. dinner before the show).").optional(),
+  near: z.string().max(120).describe("A neighborhood, landmark or venue name to search around.").optional(),
+  city: z.string().max(100).describe("City; defaults to the user's home city.").optional(),
+  state: z.string().max(10).describe("Two-letter US state code.").optional(),
+  cuisine: z.string().max(30).describe("Optional cuisine for restaurants, e.g. pizza, mexican, vegan, sushi.").optional(),
+  radius_miles: z.number().min(0.2).max(3).describe("Search radius in miles (default 1).").optional(),
+});
+
+const PLACES_DESCRIPTION =
+  "Real places from OpenStreetMap map data: restaurants, cafes, bars, quick food, dessert, museums, galleries, parks, attractions, cinemas, theatres, nightclubs, bowling, zoos and aquariums " +
+  "near the user's city, a neighborhood or landmark, or an event's venue. Returns up to 6 named places, nearest first, with cuisine, address, opening hours when known and miles away, " +
+  "plus map buttons. There are no prices in map data: never state or guess a price for these places. " +
+  "Call this whenever the user asks where to eat, drink or hang out, for cheap or free things to do that aren't ticketed events, or for places near an event.";
+
 const SAVINGS_DESCRIPTION =
   "Weekly savings plan for one goal, using the Livento wallet's rule: weekly = what's left ÷ weeks to the deadline, rounded up to whole dollars. " +
   "Returns what's left, weeks left, the weekly amount and the finish date, and how much sooner an optional extra weekly amount would finish. " +
@@ -740,6 +757,39 @@ async function travelLinks(ctx: ToolContext, input: z.infer<typeof TravelInput>)
   };
 }
 
+async function placesTool(ctx: ToolContext, input: z.infer<typeof PlacesInput>) {
+  let city = input.city?.trim() || ctx.profile.city;
+  let state = input.state?.trim() || (input.city ? undefined : ctx.profile.stateCode);
+  let near = input.near?.trim() ?? "";
+  let at: { lat: number; lng: number } | null = null;
+  let around = near || city;
+  if (input.event_id) {
+    const event = await lookUpEvent(input.event_id);
+    city = event.city || city;
+    state = event.state ?? state;
+    if (typeof event.lat === "number" && typeof event.lng === "number") at = { lat: event.lat, lng: event.lng };
+    near = event.source === "sample" ? "" : (event.venue ?? "");
+    around = near || city;
+  }
+  if (!city) throw new Error("Pass a city (the user has no home city yet).");
+  at ??= await geocode(near, city, state);
+  if (!at) throw new Error(`Couldn't find "${around}" on the map.`);
+  const places = await findPlaces(input.kind, at, {
+    radiusMeters: (input.radius_miles ?? 1) * 1609,
+    cuisine: input.cuisine,
+    limit: 6,
+  });
+  for (const place of places.slice(0, 3)) addAction(ctx, `Map: ${place.name.length > 24 ? `${place.name.slice(0, 23)}…` : place.name}`, place.mapUrl);
+  return {
+    around: [around, state].filter(Boolean).join(", "),
+    kind: input.kind,
+    places: places.map(({ mapUrl: _mapUrl, ...rest }) => rest),
+    note: places.length
+      ? "From OpenStreetMap map data. No prices are known for these places."
+      : "No matching places found nearby in the map data; try a bigger radius or another kind.",
+  };
+}
+
 /** Built per request (the tools close over the user's context); definitions are byte-identical every time. */
 function buildTools(ctx: ToolContext) {
   return [
@@ -773,10 +823,16 @@ function buildTools(ctx: ToolContext) {
       inputSchema: TravelInput,
       run: async (input) => result(ctx, "travel_links", await travelLinks(ctx, input)),
     }),
+    betaZodTool({
+      name: "find_places",
+      description: PLACES_DESCRIPTION,
+      inputSchema: PlacesInput,
+      run: async (input) => result(ctx, "find_places", await placesTool(ctx, input)),
+    }),
   ];
 }
 
-/** The same five tools for Gemini: same names, descriptions, input schemas and executors. */
+/** The same six tools for Gemini: same names, descriptions, input schemas and executors. */
 interface GeminiTool {
   name: string;
   description: string;
@@ -799,6 +855,7 @@ const GEMINI_TOOLS: GeminiTool[] = [
   geminiTool("find_events", FIND_DESCRIPTION, FindInput, findEventsTool),
   geminiTool("trim_plan", TRIM_DESCRIPTION, TrimInput, trimPlanTool),
   geminiTool("travel_links", TRAVEL_DESCRIPTION, TravelInput, travelLinks),
+  geminiTool("find_places", PLACES_DESCRIPTION, PlacesInput, placesTool),
 ];
 
 let geminiDeclarations: Record<string, unknown>[] | undefined;
@@ -844,7 +901,7 @@ async function runGeminiCall(ctx: ToolContext, call: GeminiFunctionCall): Promis
 // The chat loop
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are Ask Livento, the helper inside Livento: a US app for planning and saving for live experiences such as concerts, theatre, comedy, sports, festivals and big trips. People save in a Livento wallet, with one envelope per goal.
+const SYSTEM_PROMPT = `You are Ask Livento, the helper inside Livento: a US app for planning and saving for live experiences such as concerts, theatre, comedy, sports, festivals and big trips, and for good times around them: places to eat and drink, museums, parks and other things to do. People save in a Livento wallet, with one envelope per goal.
 
 How to answer
 - Keep it short: about 120 words or less, in plain sentences or up to four short bullets that start with "- ". No headings, tables, bold text, emojis or links.
@@ -857,11 +914,11 @@ Numbers come from Livento, not from you
 - If something is missing (no profile, no envelope, no spending summary, price TBA), say so in one sentence and say where to add it.
 
 Tools and buttons
-- Use the tools for every figure: savings_plan for weekly amounts and finish dates, cost_plan for what an event costs, find_events for ideas and event ids, trim_plan for spending less, travel_links for hotels and maps. Call independent tools together.
+- Use the tools for every figure: savings_plan for weekly amounts and finish dates, cost_plan for what an event costs, find_events for ideas and event ids, trim_plan for spending less, travel_links for hotels and maps, find_places for restaurants, cafes, bars, museums, parks and other places. Call independent tools together.
 - Buttons for the links the tools return appear under your answer automatically. Don't write URLs or name links that no tool returned; you can mention "the buttons below".
 
 Facts to keep straight
-- The Livento wallet runs in Stripe test mode: no real money moves. Say so when the user asks about adding, withdrawing or auto-saving money.
+- Money moves only through the Wallet page's own buttons (Add money, auto-save, Withdraw to card); point there when asked.
 - You can't move money, change envelopes or book anything yourself.
 - This isn't financial advice. Mention that only when the question needs it (investing, debt, loans, taxes). Never suggest loans, credit or lotteries.
 
