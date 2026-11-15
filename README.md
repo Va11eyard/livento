@@ -41,7 +41,8 @@ All optional. See `.env.example` for comments.
 | Variable | Purpose | Without it |
 | --- | --- | --- |
 | `TICKETMASTER_API_KEY` | Live concerts, theatre and more, with prices and on-sale dates | Labeled sample events (sports stay live via TheSportsDB) |
-| `ANTHROPIC_API_KEY` | Ask Livento, picks re-ranking and "why" lines, roadmap wording, quotes, merchant categories (`claude-opus-5-5`) | Rule order and templates; Ask Livento shows "not connected" |
+| `ANTHROPIC_API_KEY` | Ask Livento, picks re-ranking and "why" lines, roadmap wording, quotes, merchant categories (`claude-opus-5-5`) | Gemini if set; otherwise rule order and templates, and Ask Livento shows "not connected" |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` (optional, default `gemini-3.8-flash`) | Backup AI for the same features when Claude is missing or fails for account reasons (Claude is skipped for 10 minutes); web event search via Grounding with Google Search (paid tier only) | Claude only |
 | `STRIPE_SECRET_KEY` | Wallet (add money, auto-save, withdraw) and Premium checkout. `sk_test_…` only; live keys are refused | Wallet shows "not connected"; Premium via Demo unlock |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | Telegram bot | Telegram features hidden |
 | `RESEND_API_KEY`, `ALERTS_FROM_EMAIL` | Email alerts | Email alerts hidden |
@@ -89,7 +90,7 @@ Not used by design: Amadeus Self-Service (shut down), Eventbrite public search (
 | `/api/recommend` | POST | Top 8 with "why"; `ranker: "llm" \| "rules"` |
 | `/api/plan`, `/api/roadmap` | POST | Cost lines, weekly amount; dated steps |
 | `/api/insights` | POST | CSV text (≤ 1 MB) or `sample: true` → spending by category and month |
-| `/api/assistant` | POST | Ask Livento chat with tools; `{ off: true }` without a Claude key |
+| `/api/assistant` | POST | Ask Livento chat with tools (Claude, Gemini as backup); `{ off: true }` without an AI key |
 | `/api/quote` | POST | One motivational line about the user's goals; curated fallback |
 | `/api/wallet`, `/api/wallet/{summary,deposit,confirm,withdraw,autosave}` | POST | Wallet; the token travels in the body only |
 | `/api/checkout`, `/api/checkout/session` | POST | Premium test checkout; confirm or cancel the test subscription |

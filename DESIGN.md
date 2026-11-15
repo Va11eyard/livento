@@ -64,9 +64,9 @@ Fonts are bundled in `public/assets/fonts` with their licenses in `public/assets
 - `prefers-reduced-motion`: static posters instead of GIFs, no trail animation, no smooth scroll.
 
 ## Imagery
-- Free-licensed photos (Unsplash / Pexels) of crowds, stages, festivals, cinemas; credited in `public/assets/CREDITS.md`, hashed in `public/assets/assets.json`.
-- No trademarked imagery: no theme-park castles or characters, no logos, no identifiable artist photos. Name places in text with official links.
-- Event images from Ticketmaster are shown only with the event data they belong to.
+- Event cards and event pages show the event's own image (user decision, 2026-11-15): the preview image of its source page (`og:image`, else `twitter:image`, the same image link previews show) for web-search events and curated experiences, TheSportsDB's event thumbnail for games, Ticketmaster's image for Ticketmaster events. Each is shown only with its own event, credited on the image ("Image: songkick.com", "Image: TheSportsDB"), alt text = the event name, same 1.5:1 cover crop.
+- Fallback: the local category photo when the event has no image of its own, its page lists several events, the image is a site logo or default picture, or it fails to load (hotlink-blocked).
+- Livento's own imagery (landing, trail, fallbacks): free-licensed photos (Unsplash / Pexels) of crowds, stages, festivals, cinemas; credited in `public/assets/CREDITS.md`, hashed in `public/assets/assets.json`. No trademarked imagery there: no theme-park castles or characters, no logos, no identifiable artist photos. Name places in text with official links.
 
 ## Accessibility
 - Visible focus ring on every interactive element; keyboard reachable; skip link.

@@ -11,11 +11,20 @@
  *   `server-side-fallback-2026-07-01`) on `client.beta.messages.create`. If the
  *   beta is rejected (400) the GA endpoint is used instead.
  * - The client is created lazily, only when ANTHROPIC_API_KEY is set.
+ *
+ * Provider choice (shared by Ask Livento, quotes and the web events search):
+ * Claude first whenever ANTHROPIC_API_KEY is set. An account failure (credit
+ * balance too low, 401, 403, 404, no connection, overloaded) pauses Claude for
+ * 10 minutes on this instance and Gemini (lib/gemini.ts, GEMINI_API_KEY) takes
+ * over, within the same request. With only GEMINI_API_KEY, Gemini answers.
+ * The three calls below fall back the same way (geminiStructured).
  */
+import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { geminiConfigured, geminiStructured } from "./gemini";
 import { SPEND_CATEGORIES, type SpendCategory } from "./spending";
 import { CATEGORY_LABELS, type LiventoEvent, type Profile, type RoadmapStep } from "./types";
 
@@ -24,18 +33,79 @@ const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 const TIMEOUTS = { rerank: 12_000, categorize: 12_000, roadmap: 20_000 } as const;
 
-let client: Anthropic | undefined;
+let client: { apiKey: string; baseURL: string; sdk: Anthropic } | undefined;
 let betaFallbacksRejected = false;
 
-export function isLlmConfigured(): boolean {
+const CLAUDE_PAUSE_MS = 10 * 60_000;
+// On globalThis so every route bundle on this instance shares it (and dev reloads keep it).
+// `key` is a hash of the key that failed: a new key gets a fresh try.
+const breaker: { until: number; key: string } = ((globalThis as unknown as { __liventoClaudeBreaker?: { until: number; key: string } })
+  .__liventoClaudeBreaker ??= { until: 0, key: "" });
+
+const keyHash = (key: string) => createHash("sha256").update(key).digest("hex").slice(0, 12);
+
+export function claudeConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+/** True when an AI provider is set: Claude (ANTHROPIC_API_KEY) or Gemini (GEMINI_API_KEY). */
+export function isLlmConfigured(): boolean {
+  return claudeConfigured() || geminiConfigured();
+}
+
+/** Claude goes first when its key is set, unless it just failed for account reasons and Gemini can take over. */
+export function claudeUsable(): boolean {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key) return false;
+  return Date.now() >= breaker.until || breaker.key !== keyHash(key) || !geminiConfigured();
+}
+
+/** Credit balance too low, bad key, no access, unknown model, no connection or overloaded (a slow answer isn't one). */
+export function isClaudeAccountError(err: unknown): boolean {
+  if (err instanceof Anthropic.APIConnectionTimeoutError) return false;
+  return (
+    err instanceof Anthropic.AuthenticationError ||
+    err instanceof Anthropic.PermissionDeniedError ||
+    err instanceof Anthropic.NotFoundError ||
+    err instanceof Anthropic.APIConnectionError ||
+    err instanceof Anthropic.OverloadedError ||
+    (err instanceof Anthropic.APIError && err.status === 529) ||
+    (err instanceof Anthropic.BadRequestError && /credit balance/i.test(String(err.message)))
+  );
+}
+
+/**
+ * After a Claude error: an account error pauses Claude for 10 minutes on this
+ * instance. True when the caller should answer with Gemini instead.
+ */
+export function claudeFailedOver(err: unknown, label: string): boolean {
+  if (!isClaudeAccountError(err)) return false;
+  breaker.until = Date.now() + CLAUDE_PAUSE_MS;
+  breaker.key = keyHash(process.env.ANTHROPIC_API_KEY?.trim() ?? "");
+  const backup = geminiConfigured();
+  console.warn(
+    `[llm] ${label}: Claude unavailable (${describeError(err)}); ${backup ? "using Gemini, Claude paused for 10 minutes" : "no GEMINI_API_KEY to fall back to"}`,
+  );
+  return backup;
+}
+
+/** The provider in use, for /api/health. */
+export function aiProviderLabel(): string {
+  const claude = claudeConfigured();
+  const gemini = geminiConfigured();
+  if (claude && gemini) return claudeUsable() ? "Claude (Gemini as backup)" : "Gemini (Claude paused after an account error)";
+  return claude ? "Claude" : gemini ? "Gemini" : "None";
 }
 
 function getClient(): Anthropic | null {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return null;
-  client ??= new Anthropic({ apiKey, maxRetries: 1 });
-  return client;
+  // A new client when the key (or the test-only ANTHROPIC_BASE_URL) changes, e.g. after a dev env reload.
+  const baseURL = process.env.ANTHROPIC_BASE_URL?.trim() ?? "";
+  if (!client || client.apiKey !== apiKey || client.baseURL !== baseURL) {
+    client = { apiKey, baseURL, sdk: new Anthropic({ apiKey, maxRetries: 1 }) };
+  }
+  return client.sdk;
 }
 
 function parseJson<S extends z.ZodType>(schema: S, text: string): z.infer<S> | null {
@@ -66,67 +136,81 @@ interface StructuredCall<S extends z.ZodType> {
   timeoutMs: number;
 }
 
-/** One structured-output request with refusal fallbacks; null on any failure. */
+/** One structured-output request: Claude with refusal fallbacks, else Gemini; null on any failure. */
 async function structuredCall<S extends z.ZodType>(call: StructuredCall<S>): Promise<z.infer<S> | null> {
-  const anthropic = getClient();
-  if (!anthropic) return null;
-  // One overall deadline covers the beta attempt, a possible GA retry and SDK retries.
+  // One overall deadline covers the beta attempt, a possible GA retry, SDK retries and a Gemini fallback.
   const signal = AbortSignal.timeout(call.timeoutMs);
-  const requestOptions = { timeout: call.timeoutMs, signal };
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: call.user }];
-
-  try {
-    if (!betaFallbacksRejected) {
-      try {
-        const msg = await anthropic.beta.messages.create(
-          {
-            model: LLM_MODEL,
-            max_tokens: call.maxTokens,
-            betas: [FALLBACK_BETA],
-            fallbacks: "default",
-            system: call.system,
-            messages,
-            output_config: { effort: call.effort, format: betaZodOutputFormat(call.schema) },
-          },
-          requestOptions,
-        );
-        if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return null;
-        // The final answer is the text after the last fallback switch point (if any).
-        let start = 0;
-        msg.content.forEach((block, i) => {
-          if (block.type === "fallback") start = i + 1;
-        });
-        const text = msg.content
-          .slice(start)
-          .map((block) => (block.type === "text" ? block.text : ""))
-          .join("");
-        return parseJson(call.schema, text);
-      } catch (err) {
-        if (!(err instanceof Anthropic.BadRequestError)) throw err;
-        console.warn(`[llm] ${call.label}: beta request rejected (400); retrying on the GA endpoint`);
+  const anthropic = claudeUsable() ? getClient() : null;
+  if (anthropic) {
+    try {
+      return await claudeStructured(anthropic, call, signal);
+    } catch (err) {
+      if (!claudeFailedOver(err, call.label)) {
+        console.warn(`[llm] ${call.label} failed: ${describeError(err)}`);
+        return null;
       }
     }
-
-    const msg = await anthropic.messages.create(
-      {
-        model: LLM_MODEL,
-        max_tokens: call.maxTokens,
-        system: call.system,
-        messages,
-        output_config: { effort: call.effort, format: zodOutputFormat(call.schema) },
-      },
-      requestOptions,
-    );
-    if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return null;
-    const text = msg.content.map((block) => (block.type === "text" ? block.text : "")).join("");
-    const parsed = parseJson(call.schema, text);
-    // The GA retry worked where the beta 400'd: skip the beta path from now on.
-    if (parsed !== null && !betaFallbacksRejected) betaFallbacksRejected = true;
-    return parsed;
-  } catch (err) {
-    console.warn(`[llm] ${call.label} failed: ${describeError(err)}`);
-    return null;
   }
+  if (!geminiConfigured()) return null;
+  const { label, schema, system, user, maxTokens, timeoutMs, effort } = call;
+  return geminiStructured({ label, schema, system, user, maxTokens, timeoutMs, effort, signal });
+}
+
+/** The Claude request; throws on API errors. */
+async function claudeStructured<S extends z.ZodType>(
+  anthropic: Anthropic,
+  call: StructuredCall<S>,
+  signal: AbortSignal,
+): Promise<z.infer<S> | null> {
+  const requestOptions = { timeout: call.timeoutMs, signal };
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: call.user }];
+  if (!betaFallbacksRejected) {
+    try {
+      const msg = await anthropic.beta.messages.create(
+        {
+          model: LLM_MODEL,
+          max_tokens: call.maxTokens,
+          betas: [FALLBACK_BETA],
+          fallbacks: "default",
+          system: call.system,
+          messages,
+          output_config: { effort: call.effort, format: betaZodOutputFormat(call.schema) },
+        },
+        requestOptions,
+      );
+      if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return null;
+      // The final answer is the text after the last fallback switch point (if any).
+      let start = 0;
+      msg.content.forEach((block, i) => {
+        if (block.type === "fallback") start = i + 1;
+      });
+      const text = msg.content
+        .slice(start)
+        .map((block) => (block.type === "text" ? block.text : ""))
+        .join("");
+      return parseJson(call.schema, text);
+    } catch (err) {
+      if (!(err instanceof Anthropic.BadRequestError) || isClaudeAccountError(err)) throw err;
+      console.warn(`[llm] ${call.label}: beta request rejected (400); retrying on the GA endpoint`);
+    }
+  }
+
+  const msg = await anthropic.messages.create(
+    {
+      model: LLM_MODEL,
+      max_tokens: call.maxTokens,
+      system: call.system,
+      messages,
+      output_config: { effort: call.effort, format: zodOutputFormat(call.schema) },
+    },
+    requestOptions,
+  );
+  if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return null;
+  const text = msg.content.map((block) => (block.type === "text" ? block.text : "")).join("");
+  const parsed = parseJson(call.schema, text);
+  // The GA retry worked where the beta 400'd: skip the beta path from now on.
+  if (parsed !== null && !betaFallbacksRejected) betaFallbacksRejected = true;
+  return parsed;
 }
 
 const tidy = (s: string) => s.replace(/\s+/g, " ").trim();

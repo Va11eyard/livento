@@ -26,6 +26,13 @@
  *   automatic caching lets each tool round reuse the previous round's prefix.
  * - One overall deadline (AbortSignal) per answer; the client is created lazily
  *   and only when ANTHROPIC_API_KEY is set.
+ *
+ * Gemini backup (lib/gemini.ts; provider choice in lib/llm.ts): when Claude is
+ * unavailable, or fails for account reasons (e.g. credit balance too low) within
+ * this same request, the same system prompt, the same five tools (as
+ * functionDeclarations, zod schemas converted) and the same executors run on
+ * Gemini: at most MAX_TOOL_ROUNDS rounds of function calls, then one answer with
+ * function calling off. Links, the number check and cleaning are shared.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat, betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
@@ -37,7 +44,21 @@ import { findCity } from "./cities";
 import { buildPlan, eventDistanceMiles, needsTrip } from "./cost";
 import { addDays, daysBetween, isoDatePart, todayISO } from "./dates";
 import { siteOrigin } from "./http";
-import { isLlmConfigured, LLM_MODEL } from "./llm";
+import {
+  GeminiError,
+  describeGeminiError,
+  generateContent,
+  geminiBlocked,
+  geminiConfigured,
+  geminiSchema,
+  geminiStructured,
+  geminiText,
+  thinking,
+  type GeminiContent,
+  type GeminiFunctionCall,
+  type GeminiPart,
+} from "./gemini";
+import { claudeFailedOver, claudeUsable, isClaudeAccountError, isLlmConfigured, LLM_MODEL } from "./llm";
 import { randomQuote } from "./quotes";
 import { formatDate } from "./roadmap";
 import { scoreEvents, templateWhy } from "./score";
@@ -113,6 +134,12 @@ export class AssistantError extends Error {
 
 function classify(err: unknown): AssistantErrorKind {
   if (err instanceof AssistantError) return err.kind;
+  if (err instanceof GeminiError) {
+    if (err.kind === "timeout") return "timeout";
+    if (err.kind === "rate_limit" || err.kind === "server") return "busy";
+    if (err.kind === "auth" || err.kind === "not_found" || err.kind === "network" || err.kind === "off") return "unavailable";
+    return "failed";
+  }
   if (err instanceof Anthropic.APIUserAbortError || err instanceof Anthropic.APIConnectionTimeoutError) return "timeout";
   if (err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError")) return "timeout";
   if (err instanceof Anthropic.RateLimitError || err instanceof Anthropic.InternalServerError) return "busy";
@@ -131,6 +158,7 @@ function classify(err: unknown): AssistantErrorKind {
 function describeError(err: unknown): string {
   // The API's own message (never contains the key) says which field it rejected.
   if (err instanceof Anthropic.APIError) return `${err.name} ${err.status ?? ""} ${String(err.message).slice(0, 400)}`.trim();
+  if (err instanceof GeminiError) return describeGeminiError(err);
   if (err instanceof Error) return err.name;
   return "unknown error";
 }
@@ -398,7 +426,7 @@ const COST_DESCRIPTION =
   "Call this when the user asks what an event costs or whether they can afford it, or before planning for an event that has no envelope.";
 
 const FIND_DESCRIPTION =
-  "Searches Livento's events (live listings or labeled sample events, plus curated big experiences) and ranks them with Livento's recommendation score. " +
+  "Searches Livento's events (live sports, events found by web search, plus curated big experiences) and ranks them with Livento's recommendation score. " +
   "Returns up to 5 events with id, date, place, ticket price and the estimated all-in cost for one ticket. " +
   "Call this when the user wants ideas, something cheap or nearby, events in a date range or another city, or names an artist, team or show you need an id for. " +
   "City, state and categories default to the user's profile.";
@@ -748,6 +776,70 @@ function buildTools(ctx: ToolContext) {
   ];
 }
 
+/** The same five tools for Gemini: same names, descriptions, input schemas and executors. */
+interface GeminiTool {
+  name: string;
+  description: string;
+  schema: z.ZodType;
+  run: (ctx: ToolContext, input: unknown) => unknown;
+}
+
+function geminiTool<S extends z.ZodType>(
+  name: string,
+  description: string,
+  schema: S,
+  run: (ctx: ToolContext, input: z.infer<S>) => unknown,
+): GeminiTool {
+  return { name, description, schema, run: (ctx, input) => run(ctx, input as z.infer<S>) };
+}
+
+const GEMINI_TOOLS: GeminiTool[] = [
+  geminiTool("savings_plan", SAVINGS_DESCRIPTION, SavingsInput, savingsPlan),
+  geminiTool("cost_plan", COST_DESCRIPTION, CostInput, costPlan),
+  geminiTool("find_events", FIND_DESCRIPTION, FindInput, findEventsTool),
+  geminiTool("trim_plan", TRIM_DESCRIPTION, TrimInput, trimPlanTool),
+  geminiTool("travel_links", TRAVEL_DESCRIPTION, TravelInput, travelLinks),
+];
+
+let geminiDeclarations: Record<string, unknown>[] | undefined;
+
+function geminiFunctionDeclarations(): Record<string, unknown>[] {
+  geminiDeclarations ??= GEMINI_TOOLS.map((t) => ({ name: t.name, description: t.description, parameters: geminiSchema(t.schema) }));
+  return geminiDeclarations;
+}
+
+/** Drops the nulls a model may send for optional fields (zod's .optional() takes undefined, not null). */
+function withoutNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutNulls);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, v]) => v !== null)
+      .map(([k, v]) => [k, withoutNulls(v)]),
+  );
+}
+
+/** One function call, like the Claude tool runner: input validated with zod, errors go back to the model. */
+async function runGeminiCall(ctx: ToolContext, call: GeminiFunctionCall): Promise<GeminiPart> {
+  const tool = GEMINI_TOOLS.find((t) => t.name === call.name);
+  let response: Record<string, unknown>;
+  if (!tool) {
+    response = { error: `Unknown tool "${String(call.name).slice(0, 60)}".` };
+  } else {
+    const input = tool.schema.safeParse(withoutNulls(call.args ?? {}));
+    if (!input.success) {
+      response = { error: `Invalid input: ${z.prettifyError(input.error)}` };
+    } else {
+      try {
+        response = { result: JSON.parse(result(ctx, tool.name, await tool.run(ctx, input.data))) };
+      } catch (err) {
+        response = { error: err instanceof Error ? err.message : "The tool failed." };
+      }
+    }
+  }
+  return { functionResponse: { ...(call.id ? { id: call.id } : {}), name: call.name, response } };
+}
+
 // ---------------------------------------------------------------------------
 // The chat loop
 // ---------------------------------------------------------------------------
@@ -865,18 +957,18 @@ async function runRounds(
   );
 }
 
-/**
- * One Ask Livento answer. Throws AssistantError (kind "off" without a key); the
- * message is always safe to show.
- */
-export async function runAssistant(input: RunAssistantInput, channel: Channel = "web"): Promise<AssistantResult> {
-  const anthropic = getClient();
-  if (!anthropic) throw new AssistantError("off");
-  const history = cleanHistory(input.messages);
-  if (!history.length) throw new AssistantError("failed");
+interface RawAnswer {
+  text: string;
+  refused: boolean;
+}
 
-  const ctx = toolContext(input.context, channel);
-  const contextText = renderContext(ctx);
+async function answerWithClaude(
+  anthropic: Anthropic,
+  ctx: ToolContext,
+  history: AssistantChatMessage[],
+  contextText: string,
+  signal: AbortSignal,
+): Promise<RawAnswer> {
   const messages: Anthropic.Beta.BetaMessageParam[] = history.map((m, i) =>
     i === history.length - 1
       ? {
@@ -888,25 +980,93 @@ export async function runAssistant(input: RunAssistantInput, channel: Channel = 
         }
       : { role: m.role, content: m.content },
   );
+  let final: Anthropic.Beta.BetaMessage | undefined;
+  if (!betaFallbacksRejected) {
+    try {
+      final = await runRounds(anthropic, ctx, messages, signal, true);
+    } catch (err) {
+      if (!(err instanceof Anthropic.BadRequestError) || isClaudeAccountError(err)) throw err;
+      console.warn("[assistant] beta request rejected (400); retrying without the fallback beta");
+    }
+  }
+  if (!final) {
+    final = await runRounds(anthropic, ctx, messages, signal, false);
+    betaFallbacksRejected = true;
+  }
+  return { text: finalText(final), refused: final.stop_reason === "refusal" };
+}
+
+/**
+ * The same chat on Gemini: function calling with the same tools for at most
+ * MAX_TOOL_ROUNDS rounds, then one answer with function calling off.
+ */
+async function answerWithGemini(
+  ctx: ToolContext,
+  history: AssistantChatMessage[],
+  contextText: string,
+  signal: AbortSignal,
+): Promise<RawAnswer> {
+  ctx.actions.length = 0;
+  ctx.usedTools.length = 0;
+  ctx.facts.length = 0;
+  const contents: GeminiContent[] = history.map((m, i) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: i === history.length - 1 ? [{ text: contextText }, { text: m.content }] : [{ text: m.content }],
+  }));
+  const tools = [{ functionDeclarations: geminiFunctionDeclarations() }];
+  for (let round = 0; ; round++) {
+    const last = round >= MAX_TOOL_ROUNDS;
+    const res = await generateContent(
+      {
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents,
+        tools,
+        toolConfig: { functionCallingConfig: { mode: last ? "NONE" : "AUTO" } },
+        generationConfig: { maxOutputTokens: MAX_TOKENS, ...thinking("low") },
+      },
+      { timeoutMs: ASSISTANT_TIMEOUT_MS, signal },
+    );
+    if (geminiBlocked(res)) return { text: "", refused: true };
+    const content = res.candidates?.[0]?.content;
+    const calls = (content?.parts ?? []).flatMap((p) => (p.functionCall ? [p.functionCall] : []));
+    if (last || !content || calls.length === 0) return { text: geminiText(res), refused: false };
+    // The model turn goes back unchanged: its parts carry the thought signatures Gemini 3+ requires.
+    contents.push({ role: "model", parts: content.parts });
+    const responses: GeminiPart[] = [];
+    for (const call of calls) responses.push(await runGeminiCall(ctx, call)); // in order, so the links stay deterministic
+    contents.push({ role: "user", parts: responses });
+  }
+}
+
+/**
+ * One Ask Livento answer: Claude first, Gemini when Claude is unavailable or fails
+ * for account reasons in this request. Throws AssistantError (kind "off" without
+ * any key); the message is always safe to show.
+ */
+export async function runAssistant(input: RunAssistantInput, channel: Channel = "web"): Promise<AssistantResult> {
+  const anthropic = claudeUsable() ? getClient() : null;
+  if (!anthropic && !geminiConfigured()) throw new AssistantError("off");
+  const history = cleanHistory(input.messages);
+  if (!history.length) throw new AssistantError("failed");
+
+  const ctx = toolContext(input.context, channel);
+  const contextText = renderContext(ctx);
   const signal = AbortSignal.timeout(channel === "telegram" ? 25_000 : ASSISTANT_TIMEOUT_MS);
 
   try {
-    let final: Anthropic.Beta.BetaMessage | undefined;
-    if (!betaFallbacksRejected) {
+    let answer: RawAnswer | undefined;
+    if (anthropic) {
       try {
-        final = await runRounds(anthropic, ctx, messages, signal, true);
+        answer = await answerWithClaude(anthropic, ctx, history, contextText, signal);
       } catch (err) {
-        if (!(err instanceof Anthropic.BadRequestError)) throw err;
-        console.warn("[assistant] beta request rejected (400); retrying without the fallback beta");
+        // A credit-balance (or other account) error: Gemini answers this same request.
+        if (!claudeFailedOver(err, "assistant")) throw err;
       }
     }
-    if (!final) {
-      final = await runRounds(anthropic, ctx, messages, signal, false);
-      betaFallbacksRejected = true;
-    }
+    answer ??= await answerWithGemini(ctx, history, contextText, signal);
 
-    if (final.stop_reason === "refusal") return { text: REFUSAL_TEXT, actions: [], usedTools: [...ctx.usedTools] };
-    const text = cleanAnswer(finalText(final));
+    if (answer.refused) return { text: REFUSAL_TEXT, actions: [], usedTools: [...ctx.usedTools] };
+    const text = cleanAnswer(answer.text);
     if (!text) throw new AssistantError("failed");
     const unverified = unverifiedNumbers(text, [contextText, ...ctx.facts, ...history.map((m) => m.content)]);
     if (unverified > 0) console.info(`[assistant] ${unverified} number(s) in an answer were not in tool results or context`);
@@ -1010,9 +1170,9 @@ function parseJson<S extends z.ZodType>(schema: S, text: string): z.infer<S> | n
 /** One structured-output request with refusal fallbacks (same pattern as lib/llm.ts); null when unusable. */
 async function structuredOnce<S extends z.ZodType>(
   anthropic: Anthropic,
-  call: { schema: S; system: string; user: string; maxTokens: number; timeoutMs: number },
+  call: { schema: S; system: string; user: string; maxTokens: number },
+  signal: AbortSignal,
 ): Promise<z.infer<S> | null> {
-  const signal = AbortSignal.timeout(call.timeoutMs);
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: call.user }];
   if (!betaFallbacksRejected) {
     try {
@@ -1031,7 +1191,7 @@ async function structuredOnce<S extends z.ZodType>(
       if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return null;
       return parseJson(call.schema, finalText(msg));
     } catch (err) {
-      if (!(err instanceof Anthropic.BadRequestError)) throw err;
+      if (!(err instanceof Anthropic.BadRequestError) || isClaudeAccountError(err)) throw err;
       console.warn("[assistant] quote: beta request rejected (400); retrying on the GA endpoint");
     }
   }
@@ -1066,11 +1226,14 @@ function cleanQuote(raw: string): string | null {
   return line;
 }
 
-/** POST /api/quote: one original line about the user's goals, or a curated line from lib/quotes.ts. Never throws. */
+/**
+ * POST /api/quote: one original line about the user's goals (Claude, else Gemini),
+ * or a curated line from lib/quotes.ts. Never throws.
+ */
 export async function writeMotivationLine(req: QuoteRequest): Promise<QuoteResponse> {
   const curated: QuoteResponse = { text: randomQuote().text, source: "curated" };
-  const anthropic = getClient();
-  if (!anthropic) return curated;
+  const anthropic = claudeUsable() ? getClient() : null;
+  if (!anthropic && !geminiConfigured()) return curated;
   const interests = req.interests
     .map((i) => ((CATEGORIES as readonly string[]).includes(i) ? CATEGORY_LABELS[i as Category] : i.trim()))
     .filter(Boolean)
@@ -1081,18 +1244,21 @@ export async function writeMotivationLine(req: QuoteRequest): Promise<QuoteRespo
     city: req.city?.trim() || undefined,
     name: req.name?.trim() || undefined,
   });
-  try {
-    const out = await structuredOnce(anthropic, {
-      schema: QuoteLineSchema,
-      system: QUOTE_SYSTEM,
-      user: `Write the line for this person.\n${user}`,
-      maxTokens: 2_000,
-      timeoutMs: QUOTE_TIMEOUT_MS,
-    });
-    const line = out ? cleanQuote(out.line) : null;
-    return line ? { text: line, source: "ai" } : curated;
-  } catch (err) {
-    console.warn(`[assistant] quote failed: ${describeError(err)}`);
-    return curated;
+  const call = { schema: QuoteLineSchema, system: QUOTE_SYSTEM, user: `Write the line for this person.\n${user}`, maxTokens: 2_000 };
+  const signal = AbortSignal.timeout(QUOTE_TIMEOUT_MS); // one deadline, Gemini fallback included
+  if (anthropic) {
+    try {
+      const out = await structuredOnce(anthropic, call, signal);
+      const line = out ? cleanQuote(out.line) : null;
+      return line ? { text: line, source: "ai" } : curated;
+    } catch (err) {
+      if (!claudeFailedOver(err, "quote")) {
+        console.warn(`[assistant] quote failed: ${describeError(err)}`);
+        return curated;
+      }
+    }
   }
+  const out = await geminiStructured({ ...call, label: "quote", timeoutMs: QUOTE_TIMEOUT_MS, signal });
+  const line = out ? cleanQuote(out.line) : null;
+  return line ? { text: line, source: "ai" } : curated;
 }

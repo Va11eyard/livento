@@ -3,7 +3,7 @@ import { apiError, json, siteOrigin } from "@/lib/http";
 import { isKvConfigured } from "@/lib/kv";
 import { isLlmConfigured } from "@/lib/llm";
 import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
-import { CRON_CITIES, MAX_WEB_SEARCHES, WEB_SEARCH_MODEL } from "@/lib/webEvents";
+import { CRON_CITIES, MAX_WEB_SEARCHES, webSearchModel } from "@/lib/webEvents";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     return apiError("Unauthorized", 401);
   }
   if (!isLlmConfigured()) {
-    return json({ ok: false, queued: 0, note: "AI web search is off: ANTHROPIC_API_KEY is not set" });
+    return json({ ok: false, queued: 0, note: "AI web search is off: neither ANTHROPIC_API_KEY nor GEMINI_API_KEY is set" });
   }
   // On Vercel the results must land in Redis to be shared; locally the dev server's memory is enough.
   if (!isKvConfigured() && process.env.VERCEL) {
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
   return json({
     ok: queued > 0,
     queued,
-    model: WEB_SEARCH_MODEL,
+    model: webSearchModel(),
     maxWebSearchesPerCity: MAX_WEB_SEARCHES,
     maxWebSearchesThisRun: queued * MAX_WEB_SEARCHES,
     storage: isKvConfigured() ? "redis" : "memory",

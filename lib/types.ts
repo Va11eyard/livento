@@ -65,7 +65,8 @@ export interface LiventoEvent {
   onSaleStart?: string; // ISO datetime of the public on-sale, if known
   presales?: Presale[];
   url: string; // official / ticketing page (outbound link)
-  image?: string; // remote image URL from the source (Ticketmaster) or a local /assets path
+  image?: string; // the event's own https image (its page's og:image, TheSportsDB thumb, Ticketmaster) or a local /assets path
+  imageCredit?: string; // who the image comes from, shown as "Image: <credit>", e.g. "songkick.com", "TheSportsDB"
   attribution?: string; // e.g. "Event data: Ticketmaster"
   tags: string[]; // lowercase tags used for matching: category, genre, sub-genre, attraction names
 }

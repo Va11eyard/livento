@@ -2,15 +2,20 @@
  * Event catalogue (server-only): live Ticketmaster events when a key is set and
  * answering; otherwise real upcoming sports games from TheSportsDB (free,
  * keyless) plus real events found by AI web search (lib/webEvents, stored per
- * city), and labeled sample events only when neither has anything; plus the
- * curated big-experiences list. Shared by GET /api/events, the assistant and
- * the daily alerts job. Never runs a web search itself: it reads stored
- * results and reports `webSearch: "pending"` so Discover can ask for one.
+ * city); plus the curated big-experiences list. Only real events are listed:
+ * when nothing is found the notice says so (sample events are never listed;
+ * they only resolve by id for links saved earlier). Web and curated events get
+ * their page's preview image (lib/eventImages). Shared by GET /api/events, the
+ * assistant, the daily alerts job and the Telegram picks. Never runs a web
+ * search itself: it reads stored results and reports `webSearch: "pending"`
+ * so Discover can ask for one.
  */
+import { after } from "next/server";
 import experiencesJson from "@/data/experiences.json";
 import sampleEventsJson from "@/data/sample-events.json";
 import { findCity } from "./cities";
 import { addDays, isoDatePart, todayISO } from "./dates";
+import { previewImages } from "./eventImages";
 import { distanceMiles, isLatLng, type LatLng } from "./geo";
 import { EventSchema } from "./schemas";
 import { getSportsEventById, getSportsEvents, sportsIdOf } from "./thesportsdb";
@@ -27,19 +32,70 @@ const SPORTS_ONLY_NOTICE =
   "Real upcoming games from TheSportsDB. Ticket prices aren't listed, so cost plans use labeled estimates.";
 const SPORTS_WEB_EMPTY_NOTICE =
   "Sports are live from TheSportsDB. AI web search found no matching concerts or shows nearby yet.";
-const WEB_EMPTY_NOTICE = "AI web search found no matching events nearby yet.";
-export const SAMPLE_NOTICE = "Showing labeled sample events.";
-const SAMPLE_PENDING_NOTICE = "Showing labeled sample events while AI web search looks for real ones near you.";
-const SAMPLE_WEB_EMPTY_NOTICE = "Showing labeled sample events: AI web search found no matching events nearby yet.";
+
+/** Same wording as Discover's empty state. */
+const noEventsNotice = (city?: string) =>
+  `No events found ${city ? `near ${city}` : "nearby"} yet. Try a bigger travel radius or more interests.`;
 
 /** Discover's note for the no-Ticketmaster mix. Never mentions Ticketmaster. */
-function catalogNotice(sports: number, web: number, samples: number, state: WebSearchState): string | undefined {
-  if (samples > 0) {
-    return state === "off" ? SAMPLE_NOTICE : state === "pending" ? SAMPLE_PENDING_NOTICE : SAMPLE_WEB_EMPTY_NOTICE;
-  }
+function catalogNotice(sports: number, web: number, state: WebSearchState, city?: string): string {
   if (web > 0 || state === "pending") return sports > 0 ? LIVE_NOTICE : WEB_NOTICE;
   if (sports > 0) return state === "off" ? SPORTS_ONLY_NOTICE : SPORTS_WEB_EMPTY_NOTICE;
-  return state === "cached" ? WEB_EMPTY_NOTICE : undefined;
+  return noEventsNotice(city);
+}
+
+const IMAGE_FETCHES_PER_REQUEST = 12;
+const IMAGE_WAIT_MS = 1_200;
+/** A site's logo or default share picture isn't the event's own image. */
+const GENERIC_IMAGE = /(^|[/_.-])(logos?|default|placeholder|favicon)([/_.-]|$)/i;
+
+function siteOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isGenericImage(url: string): boolean {
+  try {
+    return GENERIC_IMAGE.test(new URL(url).pathname);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Gives web and curated events without an image of their own the preview image
+ * of their page (og:image), credited to the page's site. A web page shared by
+ * several events is a listing, so its image isn't any one event's: skipped.
+ * Time-boxed: pages not answered in time keep the local photo now and are
+ * cached (the fetch keeps running after the response) for the next request.
+ */
+async function withPreviewImages(events: LiventoEvent[]): Promise<LiventoEvent[]> {
+  const namesByUrl = new Map<string, Set<string>>();
+  for (const e of events) {
+    if (e.source === "web") namesByUrl.set(e.url, (namesByUrl.get(e.url) ?? new Set()).add(e.name.toLowerCase()));
+  }
+  const wants = (e: LiventoEvent) =>
+    (!e.image || e.image.startsWith("/")) &&
+    (e.source === "curated" || (e.source === "web" && (namesByUrl.get(e.url)?.size ?? 0) <= 1));
+  const urls = events.filter(wants).map((e) => e.url);
+  if (urls.length === 0) return events;
+  const { images, rest } = await previewImages(urls, IMAGE_FETCHES_PER_REQUEST, IMAGE_WAIT_MS);
+  if (rest) {
+    try {
+      after(() => rest);
+    } catch {
+      // Outside a request (scripts): nothing to keep alive.
+    }
+  }
+  return events.map((e) => {
+    const image = wants(e) ? images.get(e.url) : undefined;
+    if (!image || isGenericImage(image)) return e;
+    const credit = siteOf(e.url);
+    return { ...e, image, ...(credit ? { imageCredit: credit } : {}) };
+  });
 }
 
 function loadEvents(raw: unknown, label: string, extra?: (item: Record<string, unknown>) => Partial<LiventoEvent>) {
@@ -69,7 +125,10 @@ export function curatedEvents(): LiventoEvent[] {
   return curatedCache;
 }
 
-/** Fictional sample events for the judge path (always labeled). */
+/**
+ * Fictional sample events (always labeled). Never listed any more: kept only so
+ * `smp_` ids saved earlier still resolve in findEventById.
+ */
 export function sampleEvents(): LiventoEvent[] {
   sampleCache ??= loadEvents(sampleEventsJson, "sample", () => ({
     attribution: "Sample data — fictional event",
@@ -91,7 +150,7 @@ export function localEventById(id: string): LiventoEvent | undefined {
  */
 export async function findEventById(id: string): Promise<LiventoEvent | null> {
   const local = localEventById(id);
-  if (local) return local;
+  if (local) return local.source === "curated" ? ((await withPreviewImages([local]))[0] ?? local) : local;
   if (isWebEventId(id)) return getWebEventById(id);
   const sportsId = sportsIdOf(id);
   if (sportsId) return getSportsEventById(sportsId);
@@ -203,49 +262,41 @@ export async function findEvents(q: CatalogQuery, today: string = todayISO()): P
       notice = "Cinema listings aren't available from Ticketmaster";
     }
     return {
-      events: [...events, ...curated],
+      events: [...events, ...(await withPreviewImages(curated))],
       source: curated.length ? "mixed" : "ticketmaster",
       ...(notice ? { notice } : {}),
     };
   }
 
   // No Ticketmaster answer: real games from TheSportsDB (home venue within the
-  // radius) plus events already found by AI web search for this city. Labeled
-  // samples only when neither has anything.
+  // radius) plus events already found by AI web search for this city. Nothing
+  // else: when both are empty the notice says no events were found.
   // "from" goes along only when it's a later day: the server's today can be ahead of the venue's.
   const wantsSports = categories.length === 0 || categories.includes("sports");
-  const [games, web] = await Promise.all([
-    wantsSports
-      ? getSportsEvents({
-          lat: origin?.lat,
-          lng: origin?.lng,
-          city,
-          state,
-          radiusMiles: q.radius,
-          from: from > today ? from : undefined,
-          to,
-        })
-      : Promise.resolve([]),
-    cachedWebEvents({ city, state, lat: origin?.lat, lng: origin?.lng, categories, from, to }),
+  const gamesTask: Promise<LiventoEvent[]> = wantsSports
+    ? getSportsEvents({
+        lat: origin?.lat,
+        lng: origin?.lng,
+        city,
+        state,
+        radiusMiles: q.radius,
+        from: from > today ? from : undefined,
+        to,
+      })
+    : Promise.resolve([]);
+  const web = await cachedWebEvents({ city, state, lat: origin?.lat, lng: origin?.lng, categories, from, to });
+  const found = web.events.filter((e) => matchesKeyword(e, keyword));
+  // Preview images load while the sports lookup is still running.
+  const [games, pictured] = await Promise.all([
+    gamesTask,
+    withPreviewImages([...found, ...curated.sort(byNearest(city, state))]),
   ]);
   const sports = games.filter((e) => matchesKeyword(e, keyword)).map((e) => withDistance(e, origin));
-  const found = web.events.filter((e) => matchesKeyword(e, keyword));
 
-  const samples =
-    sports.length > 0 || found.length > 0
-      ? []
-      : sampleEvents()
-          .filter((e) => matchesCategories(e, categories))
-          .filter((e) => !e.date || (e.date >= from && e.date <= to))
-          .filter((e) => matchesKeyword(e, keyword))
-          .map((e) => withDistance(e, origin))
-          .sort(byNearest(city, state));
-
-  const notice = catalogNotice(sports.length, found.length, samples.length, web.state);
   return {
-    events: [...sports, ...found, ...samples, ...curated.sort(byNearest(city, state))],
-    source: samples.length > 0 ? "sample" : "mixed",
-    ...(notice ? { notice } : {}),
+    events: [...sports, ...pictured],
+    source: "mixed",
+    notice: catalogNotice(sports.length, found.length, web.state, city),
     webSearch: web.state,
   };
 }

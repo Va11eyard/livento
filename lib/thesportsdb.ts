@@ -42,6 +42,7 @@ const MAX_TEAMS_PER_QUERY = 12;
 const DEFAULT_RADIUS_MILES = 50;
 
 export const TSDB_ATTRIBUTION = "Event data: TheSportsDB";
+export const TSDB_IMAGE_CREDIT = "TheSportsDB";
 
 // ---------------------------------------------------------------------------
 // Leagues and teams
@@ -447,6 +448,17 @@ function httpsUrl(value: string | undefined): string | undefined {
   }
 }
 
+/** An event thumbnail URL only when it's already https (never upgraded or guessed). */
+function httpsImage(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" && u.hostname.includes(".") ? u.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * A TheSportsDB event as a Livento event, or null when we can't place it reliably:
  * the home team must be one we know, and the game must be at that team's home venue
@@ -471,6 +483,7 @@ function mapGame(e: RawEvent, upcomingOnly: boolean, now = Date.now()): LiventoE
   const away = e.strAwayTeam ?? e.strEvent?.split(/\s+vs\.?\s+/i)[1]?.trim();
   const league = LEAGUES[team.league];
   const competition = e.idLeague === league.id || !e.strLeague ? team.league : e.strLeague;
+  const thumb = httpsImage(e.strThumb);
 
   return {
     id: `tsdb_${e.idEvent}`,
@@ -488,8 +501,9 @@ function mapGame(e: RawEvent, upcomingOnly: boolean, now = Date.now()): LiventoE
     lng: team.lng,
     priceNote: "Price not listed — check the team's official site",
     url: httpsUrl(team.site) ?? league.schedule,
-    // No image: TheSportsDB thumbnails are composites of team and league logos, which DESIGN.md
-    // rules out and TheSportsDB doesn't relicense. Cards fall back to the local sports photo.
+    // The event's own thumbnail (https only), shown only with this event and credited
+    // (DESIGN.md, Imagery). Cards fall back to the local sports photo without one.
+    ...(thumb ? { image: thumb, imageCredit: TSDB_IMAGE_CREDIT } : {}),
     attribution: TSDB_ATTRIBUTION,
     tags: [
       ...new Set(

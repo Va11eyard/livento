@@ -1,7 +1,7 @@
 import { emailConfigured, telegramConfigured } from "@/lib/alerts";
 import { json } from "@/lib/http";
 import { isKvConfigured } from "@/lib/kv";
-import { isLlmConfigured } from "@/lib/llm";
+import { aiProviderLabel, isLlmConfigured } from "@/lib/llm";
 import { RATE_LIMITS, rateLimit } from "@/lib/ratelimit";
 import { stripeTestKey } from "@/lib/stripe";
 import { hasTicketmasterKey } from "@/lib/ticketmaster";
@@ -25,8 +25,8 @@ export async function GET(request: Request) {
           name: "Live events (AI web search)",
           state: "live",
           detail: ticketmaster
-            ? "Ticketmaster is connected and used first. When it's unavailable, Claude's web search finds real upcoming concerts, shows, comedy and festivals near the user, each linked to the page it came from."
-            : `Claude's web search finds real upcoming concerts, shows, comedy and festivals near the user, each linked to the page it came from; prices only when the page lists one. Results are saved per city (${isKvConfigured() ? "shared database" : "in memory"}) and the 15 largest cities refresh daily. A Ticketmaster key would add official prices and on-sale dates.`,
+            ? "Ticketmaster is connected and used first. When it's unavailable, AI web search (Claude, with Gemini as backup) finds real upcoming concerts, shows, comedy and festivals near the user, each linked to the page it came from."
+            : `AI web search (Claude, with Gemini as backup) finds real upcoming concerts, shows, comedy and festivals near the user, each linked to the page it came from; prices only when the page lists one. Results are saved per city (${isKvConfigured() ? "shared database" : "in memory"}) and the 15 largest cities refresh every 3 days. A Ticketmaster key would add official prices and on-sale dates.`,
         }
       : {
           key: "events",
@@ -49,14 +49,14 @@ export async function GET(request: Request) {
           key: "ai",
           name: "AI wording",
           state: "live",
-          detail:
-            "Answers in Ask Livento, re-ranks picks and writes the \"why this\" lines and roadmap text. Numbers always come from Livento's calculators.",
+          detail: `${aiProviderLabel()}: answers in Ask Livento, re-ranks picks and writes the "why this" lines and roadmap text. Numbers always come from Livento's calculators.`,
         }
       : {
           key: "ai",
           name: "AI wording",
           state: "off",
-          detail: "No API key: Ask Livento says it isn't connected, and picks keep the rule-based order and template text.",
+          detail:
+            "No AI key (Claude or Gemini): Ask Livento says it isn't connected, and picks keep the rule-based order and template text.",
         },
     isKvConfigured()
       ? {

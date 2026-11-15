@@ -26,6 +26,14 @@
  * API rejects citations next to structured outputs for documents; if it also
  * rejects them here (400), one more attempt asks for plain JSON instead,
  * validated the same way.
+ *
+ * Gemini backup (lib/gemini.ts; provider choice in lib/llm.ts): when Claude is
+ * unavailable or fails for account reasons, Gemini searches with Grounding with
+ * Google Search and answers with the same JSON list (JSON schema; plain JSON in
+ * the prompt if the schema is refused next to the tool). Same validation, with
+ * the allowed hosts taken from the answer's grounding sources: each chunk's
+ * title (usually the domain), else its uri's host; a Google grounding redirect
+ * is followed (Location header only) just when no domain is given.
  */
 import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -36,10 +44,26 @@ import { findCity, US_CITIES } from "./cities";
 import { DAY_MS, addDays, isoDatePart, isoDateToUTC, todayISO } from "./dates";
 import { distanceMiles, isLatLng, type LatLng } from "./geo";
 import { isKvConfigured, kvGet, kvIncr, kvSet } from "./kv";
-import { LLM_MODEL, isLlmConfigured } from "./llm";
+import {
+  GeminiError,
+  describeGeminiError,
+  generateContent,
+  geminiConfigured,
+  geminiModel,
+  geminiSchema,
+  geminiText,
+  type GeminiGroundingChunk,
+  type GeminiResponse,
+} from "./gemini";
+import { LLM_MODEL, claudeFailedOver, claudeUsable, isClaudeAccountError, isLlmConfigured } from "./llm";
 import { CATEGORIES, type Category, type City, type LiventoEvent, type WebSearchState } from "./types";
 
 export const WEB_SEARCH_MODEL = LLM_MODEL;
+
+/** The model that runs the next web search (Claude's, or Gemini's while Claude is unavailable). */
+export function webSearchModel(): string {
+  return claudeUsable() ? LLM_MODEL : geminiModel();
+}
 /** Web searches allowed per request (each one is billed). */
 export const MAX_WEB_SEARCHES = 4;
 /** The 15 largest US cities (lib/cities is ordered by size), refreshed daily by /api/cron/events. */
@@ -517,17 +541,33 @@ const WebEventItemSchema = z.object({
 
 const WebEventsOutputSchema = z.object({ events: z.array(WebEventItemSchema) });
 
-const SYSTEM = [
-  "You find real upcoming live events in US cities for Livento, an app that helps people plan and save for live experiences.",
-  "Use web_search for a few targeted searches (venue calendars, promoter and ticketing pages, city event guides and 'things to do this month' lists). Search snippets often lack dates: then use web_fetch on one or two of the most promising listing pages from the results to read the actual dates, and build the list from what those pages show.",
-  "Rules:",
-  "- Include an event only if a page you saw in this turn (a search result or a page you fetched) shows it with a specific date. url: the https URL of that page (use the listing page's URL when you read the event there).",
+const INTRO =
+  "You find real upcoming live events in US cities for Livento, an app that helps people plan and save for live experiences.";
+
+const RULES = [
   "- Never invent or guess events, dates, times, venues, prices or URLs. Leave an optional field out when the page doesn't show it; leave the event out when its date or page is unclear.",
   "- Only events in or near the requested city (its metro area), between the requested dates, in the requested categories. Use exactly one of the given category keys per event.",
   "- priceMin and priceMax: only when the page or snippet shows a ticket price in US dollars (0 only when it says the event is free). Never estimate a price.",
   "- time: the local start time as 24-hour HH:MM, only when listed.",
   "- sourceTitle: the title of the search result the event came from.",
   "- Prefer a varied mix across the requested categories, soonest first. Return an empty list when nothing qualifies.",
+];
+
+const SYSTEM = [
+  INTRO,
+  "Use web_search for a few targeted searches (venue calendars, promoter and ticketing pages, city event guides and 'things to do this month' lists). Search snippets often lack dates: then use web_fetch on one or two of the most promising listing pages from the results to read the actual dates, and build the list from what those pages show.",
+  "Rules:",
+  "- Include an event only if a page you saw in this turn (a search result or a page you fetched) shows it with a specific date. url: the https URL of that page (use the listing page's URL when you read the event there).",
+  ...RULES,
+].join("\n");
+
+/** The same task and rules for Gemini, which searches with Google Search (no page fetch). */
+const GEMINI_SYSTEM = [
+  INTRO,
+  "Use Google Search for a few targeted searches (venue calendars, promoter and ticketing pages, city event guides and 'things to do this month' lists), and build the list from what the results show.",
+  "Rules:",
+  "- Include an event only if a search result you saw in this turn shows it with a specific date. url: the https URL of that result page (the page itself, never a Google or redirect link).",
+  ...RULES,
 ].join("\n");
 
 const PLAIN_JSON_RULE =
@@ -576,15 +616,19 @@ function webSearchTool(place: Place) {
   };
 }
 
-let client: Anthropic | undefined;
+let client: { apiKey: string; baseURL: string; sdk: Anthropic } | undefined;
 let betaFallbacksRejected = false;
 let jsonFormatRejected = false;
 
 function getClient(): Anthropic | null {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return null;
-  client ??= new Anthropic({ apiKey, maxRetries: 1 });
-  return client;
+  // A new client when the key (or the test-only ANTHROPIC_BASE_URL) changes, e.g. after a dev env reload.
+  const baseURL = process.env.ANTHROPIC_BASE_URL?.trim() ?? "";
+  if (!client || client.apiKey !== apiKey || client.baseURL !== baseURL) {
+    client = { apiKey, baseURL, sdk: new Anthropic({ apiKey, maxRetries: 1 }) };
+  }
+  return client.sdk;
 }
 
 function describeError(err: unknown): string {
@@ -741,8 +785,24 @@ interface Drops {
   repeat: number;
 }
 
+/** The host was seen, or (subdomains: Gemini's sources are domains) it sits under a seen domain. */
+function hostAllowed(host: string, hosts: Set<string>, subdomains: boolean): boolean {
+  if (hosts.has(host)) return true;
+  if (!subdomains) return false;
+  for (let i = host.indexOf("."); i >= 0; i = host.indexOf(".", i + 1)) {
+    const parent = host.slice(i + 1);
+    if (parent.includes(".") && hosts.has(parent)) return true;
+  }
+  return false;
+}
+
 /** Keeps only events that pass every check; see the file comment. */
-function validateEvents(items: unknown[], input: SearchInput, hosts: Set<string>): { events: LiventoEvent[]; drops: Drops } {
+function validateEvents(
+  items: unknown[],
+  input: SearchInput,
+  hosts: Set<string>,
+  subdomains = false,
+): { events: LiventoEvent[]; drops: Drops } {
   const drops: Drops = { invalid: 0, category: 0, date: 0, url: 0, far: 0, repeat: 0 };
   const allowed = new Set(input.categories);
   const seen = new Set<string>();
@@ -768,7 +828,7 @@ function validateEvents(items: unknown[], input: SearchInput, hosts: Set<string>
     }
     const url = httpsUrl(item.url);
     const host = url ? hostOf(url) : undefined;
-    if (!url || !host || !hosts.has(host)) {
+    if (!url || !host || !hostAllowed(host, hosts, subdomains)) {
       drops.url++;
       continue;
     }
@@ -828,13 +888,35 @@ function validateEvents(items: unknown[], input: SearchInput, hosts: Set<string>
   return { events: out.slice(0, input.maxEvents), drops };
 }
 
-/** One web search request (plus pause_turn resumes) within 45 s; validated events or WebSearchError. */
+function dropSummary(drops: Drops): string {
+  return Object.entries(drops)
+    .filter(([, n]) => n > 0)
+    .map(([why, n]) => `${why} ${n}`)
+    .join(", ");
+}
+
+/** One web search within SEARCH_TIMEOUT_MS: Claude first, Gemini when Claude is unavailable. Validated events or WebSearchError. */
 async function runSearch(input: SearchInput): Promise<LiventoEvent[]> {
-  const anthropic = getClient();
-  if (!anthropic) throw new WebSearchError("off", "AI web search is off");
   const started = Date.now();
   const deadlineAt = started + SEARCH_TIMEOUT_MS;
   const signal = AbortSignal.timeout(SEARCH_TIMEOUT_MS);
+  const anthropic = claudeUsable() ? getClient() : null;
+  if (anthropic) {
+    const events = await searchWithClaude(anthropic, input, started, deadlineAt, signal);
+    if (events) return events; // null: Claude failed for account reasons and Gemini takes this search
+  }
+  if (!geminiConfigured()) throw new WebSearchError("off", "AI web search is off");
+  return searchWithGemini(input, started, deadlineAt, signal);
+}
+
+/** The Claude request (plus pause_turn resumes); null when Claude is unavailable and Gemini should search instead. */
+async function searchWithClaude(
+  anthropic: Anthropic,
+  input: SearchInput,
+  started: number,
+  deadlineAt: number,
+  signal: AbortSignal,
+): Promise<LiventoEvent[] | null> {
   const rejected = new Set<Mode>();
 
   for (const mode of MODES.slice(jsonFormatRejected ? 2 : betaFallbacksRejected ? 1 : 0)) {
@@ -842,7 +924,8 @@ async function runSearch(input: SearchInput): Promise<LiventoEvent[]> {
     try {
       turn = await converse(anthropic, mode, input, deadlineAt, signal);
     } catch (err) {
-      if (err instanceof Anthropic.BadRequestError && mode !== "text") {
+      if (claudeFailedOver(err, "web-events")) return null;
+      if (err instanceof Anthropic.BadRequestError && mode !== "text" && !isClaudeAccountError(err)) {
         console.warn(`[web-events] ${mode} request rejected (400); trying the next request shape`);
         rejected.add(mode);
         continue;
@@ -860,14 +943,148 @@ async function runSearch(input: SearchInput): Promise<LiventoEvent[]> {
       throw new WebSearchError("failed", "The web search returned no usable answer");
     }
     const { events, drops } = validateEvents(items, input, turn.hosts);
-    const dropped = Object.entries(drops)
-      .filter(([, n]) => n > 0)
-      .map(([why, n]) => `${why} ${n}`)
-      .join(", ");
+    const dropped = dropSummary(drops);
     console.info(
       `[web-events] ${mode}: kept ${events.length} of ${items.length}${dropped ? ` (dropped: ${dropped})` : ""}; ` +
         `${turn.webSearches} web searches, ${turn.hosts.size} result hosts, ` +
         `${turn.inputTokens} in / ${turn.outputTokens} out tokens, ${Date.now() - started} ms`,
+    );
+    return events;
+  }
+  throw new WebSearchError("failed", "The web search request was rejected");
+}
+
+// ---------------------------------------------------------------------------
+// The Gemini request (Grounding with Google Search)
+// ---------------------------------------------------------------------------
+
+/** Google's grounding redirect host: the real page is in its Location header. */
+const REDIRECT_HOST = "vertexaisearch.cloud.google.com";
+const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const MAX_REDIRECTS = 12; // followed per search, only when needed
+let geminiJsonRejected = false;
+
+/** A grounding source's title as a host ("ticketmaster.com"), or undefined when it's a page title. */
+function domainOf(title: string | undefined): string | undefined {
+  const s = (title ?? "").trim().toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
+  return DOMAIN.test(s) ? s : undefined;
+}
+
+const isRedirect = (url: string | undefined) => !!url && hostOf(url) === REDIRECT_HOST;
+
+/** Follows Google grounding redirects (Location header only: the page itself isn't fetched), at most MAX_REDIRECTS. */
+function redirectResolver(signal: AbortSignal): (uri: string) => Promise<string | undefined> {
+  const seen = new Map<string, Promise<string | undefined>>();
+  return (uri) => {
+    const url = httpsUrl(uri);
+    if (!url || !isRedirect(url)) return Promise.resolve(undefined);
+    let found = seen.get(url);
+    if (!found) {
+      if (seen.size >= MAX_REDIRECTS) return Promise.resolve(undefined);
+      found = fetch(url, {
+        method: "HEAD",
+        redirect: "manual",
+        cache: "no-store",
+        signal: AbortSignal.any([signal, AbortSignal.timeout(4_000)]),
+      })
+        .then((res) => {
+          const location = res.headers.get("location");
+          return location ? httpsUrl(new URL(location, url).toString()) : undefined;
+        })
+        .catch(() => undefined);
+      seen.set(url, found);
+    }
+    return found;
+  };
+}
+
+/** Hosts of the answer's grounding sources: the title (usually the domain), else the uri's host, else the redirect's target. */
+async function groundingHosts(
+  chunks: GeminiGroundingChunk[],
+  resolve: (uri: string) => Promise<string | undefined>,
+): Promise<Set<string>> {
+  const hosts = new Set<string>();
+  const unresolved: string[] = [];
+  for (const chunk of chunks) {
+    const fromTitle = domainOf(chunk.web?.title);
+    const uri = chunk.web?.uri;
+    const fromUri = uri && !isRedirect(uri) ? hostOf(uri) : undefined;
+    if (fromTitle) hosts.add(fromTitle);
+    else if (fromUri) hosts.add(fromUri);
+    else if (uri) unresolved.push(uri);
+  }
+  for (const target of await Promise.all(unresolved.map(resolve))) {
+    const host = target ? hostOf(target) : undefined;
+    if (host) hosts.add(host);
+  }
+  return hosts;
+}
+
+/** An event whose url is a grounding redirect gets the page it points to (only those are followed). */
+async function resolveEventUrls(items: unknown[], resolve: (uri: string) => Promise<string | undefined>): Promise<void> {
+  await Promise.all(
+    items.map(async (item) => {
+      const event = item as { url?: unknown } | null;
+      if (!event || typeof event !== "object" || typeof event.url !== "string" || !isRedirect(event.url)) return;
+      const target = await resolve(event.url);
+      if (target) event.url = target;
+    }),
+  );
+}
+
+/** One grounded Gemini request; validated events or WebSearchError. */
+async function searchWithGemini(
+  input: SearchInput,
+  started: number,
+  deadlineAt: number,
+  signal: AbortSignal,
+): Promise<LiventoEvent[]> {
+  // JSON schema next to Google Search is a Gemini 3+ feature: if it's refused (400), ask for plain JSON instead.
+  for (const structured of geminiJsonRejected ? [false] : [true, false]) {
+    let res: GeminiResponse;
+    try {
+      res = await generateContent(
+        {
+          systemInstruction: { parts: [{ text: GEMINI_SYSTEM }] },
+          contents: [{ role: "user", parts: [{ text: userPrompt(input, !structured) }] }],
+          tools: [{ googleSearch: {} }],
+          generationConfig: {
+            maxOutputTokens: MAX_TOKENS,
+            ...(structured
+              ? { responseMimeType: "application/json", responseJsonSchema: geminiSchema(WebEventsOutputSchema) }
+              : {}),
+          },
+        },
+        { timeoutMs: Math.max(1_000, deadlineAt - Date.now()), signal },
+      );
+    } catch (err) {
+      if (structured && err instanceof GeminiError && err.kind === "bad_request") {
+        console.warn(`[web-events] gemini: JSON schema request rejected (${describeGeminiError(err)}); asking for plain JSON`);
+        continue;
+      }
+      console.warn(`[web-events] gemini search failed: ${describeGeminiError(err)}`);
+      throw new WebSearchError("failed", "The web search did not finish");
+    }
+    if (!structured) geminiJsonRejected = true; // plain JSON worked where the schema was refused
+
+    const candidate = res.candidates?.[0];
+    const items = parseEvents(geminiText(res));
+    if (!items) {
+      const why = res.promptFeedback?.blockReason ?? candidate?.finishReason ?? "none";
+      console.warn(`[web-events] gemini: no usable answer (finish: ${why})`);
+      throw new WebSearchError("failed", "The web search returned no usable answer");
+    }
+    const resolve = redirectResolver(signal);
+    const hosts = await groundingHosts(candidate?.groundingMetadata?.groundingChunks ?? [], resolve);
+    await resolveEventUrls(items, resolve);
+    const { events, drops } = validateEvents(items, input, hosts, true);
+    const dropped = dropSummary(drops);
+    const usage = res.usageMetadata;
+    console.info(
+      `[web-events] gemini: kept ${events.length} of ${items.length}${dropped ? ` (dropped: ${dropped})` : ""}; ` +
+        `${candidate?.groundingMetadata?.webSearchQueries?.length ?? 0} web searches, ${hosts.size} source hosts, ` +
+        `${usage?.promptTokenCount ?? 0} in / ${(usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0)} out tokens, ` +
+        `${Date.now() - started} ms`,
     );
     return events;
   }

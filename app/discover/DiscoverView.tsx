@@ -49,17 +49,20 @@ const MAX_RANKED = 300; // /api/recommend accepts up to 300 events
 const LIVE_NOTICE =
   "Sports are live from TheSportsDB; concerts, shows and more are found by AI web search — check each official page.";
 const WEB_NOTICE = "Concerts, shows and more are found by AI web search — check each official page.";
-const SAMPLE_WEB_EMPTY_NOTICE = "Showing labeled sample events: AI web search found no matching events nearby yet.";
+const SPORTS_WEB_EMPTY_NOTICE =
+  "Sports are live from TheSportsDB. AI web search found no matching concerts or shows nearby yet.";
+const noEventsNotice = (city: string) =>
+  `No events found near ${city} yet. Try a bigger travel radius or more interests.`;
 
 const nameDateKey = (e: LiventoEvent) => `${e.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}|${e.date ?? ""}`;
 
-/** Adds web-search events to the list; labeled samples only stay when the web search found nothing. */
+/** Adds web-search events to the list (only real events: samples are never listed). */
 function withWebEvents(base: LiventoEvent[], web: LiventoEvent[] | undefined): LiventoEvent[] {
   if (!web?.length) return base;
   const ids = new Set(base.map((e) => e.id));
   const known = new Set(base.filter((e) => e.source === "web").map(nameDateKey));
   const added = web.filter((e) => !ids.has(e.id) && !known.has(nameDateKey(e)));
-  return [...base.filter((e) => e.source !== "sample"), ...added];
+  return [...base, ...added];
 }
 
 function byDate(a: LiventoEvent, b: LiventoEvent): number {
@@ -168,11 +171,11 @@ function Discover({ profile }: { profile: Profile }) {
   // Ranking has finished (with AI/rules picks, or with the by-date fallback after an error).
   const ranked = !!recs.data || showingStale || (!!recs.error && !!list);
 
-  const hasSamples = (list ?? []).some((e) => e.source === "sample");
   let notice = base?.notice;
   if (base && list && webPending && webEvents) {
-    if (webFound > 0) notice = list.some((e) => e.source === "thesportsdb") ? LIVE_NOTICE : WEB_NOTICE;
-    else if (hasSamples) notice = SAMPLE_WEB_EMPTY_NOTICE;
+    const hasSports = list.some((e) => e.source === "thesportsdb");
+    if (webFound > 0) notice = hasSports ? LIVE_NOTICE : WEB_NOTICE;
+    else notice = hasSports ? SPORTS_WEB_EMPTY_NOTICE : noEventsNotice(profile.city);
   }
   const pickIds = new Set(picks.map((p) => p.event.id));
   const visiblePicks = picks.filter((p) => matchesFilter(p.event) && !hidden(p.event.id));
@@ -281,14 +284,7 @@ function Discover({ profile }: { profile: Profile }) {
 
       {events.data && list ? (
         <>
-          {hasSamples ? (
-            <div className={styles.banner}>
-              <SampleBanner>
-                {notice ||
-                  "Live listings aren't available right now, so these are fictional sample events for trying Livento."}
-              </SampleBanner>
-            </div>
-          ) : notice ? (
+          {notice && (list.length > 0 || webSearching) ? (
             <div className={styles.banner}>
               <Notice label="Note">{notice}</Notice>
             </div>
@@ -316,9 +312,9 @@ function Discover({ profile }: { profile: Profile }) {
           {list.length === 0 ? (
             webSearching ? null : (
             <div className={ui.outline}>
-              <h2 className={ui.smallTitle}>No events found nearby yet</h2>
+              <h2 className={ui.smallTitle}>No events found near {profile.city} yet</h2>
               <p className={styles.emptyText}>
-                Try a wider travel radius or a few more interests, then check back. New listings appear often.
+                Try a bigger travel radius or more interests, then check back. New listings appear often.
               </p>
               <div className={ui.actions}>
                 <Link href="/onboarding" className="pill small">

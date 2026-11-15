@@ -8,8 +8,8 @@ export const maxDuration = 20;
 
 /**
  * POST /api/quote — { goals, interests, city?, name? } → { text, source }.
- * One short original line about the user's goals (structured output, ≤ 120 chars,
- * no attribution), or a curated line from lib/quotes.ts when the AI is off or fails.
+ * One short original line about the user's goals (Claude, else Gemini; structured output,
+ * ≤ 120 chars, no attribution), or a curated line from lib/quotes.ts when the AI is off or fails.
  */
 export async function POST(request: Request) {
   const limited = await rateLimit(request, "quote", RATE_LIMITS.llm);

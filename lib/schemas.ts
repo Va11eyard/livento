@@ -40,6 +40,7 @@ export const EventSchema = z.object({
   presales: z.array(PresaleSchema).max(20).optional(),
   url: shortText(2_000),
   image: shortText(2_000).optional(),
+  imageCredit: shortText(100).optional(),
   attribution: shortText(200).optional(),
   tags: z.array(shortText(100)).max(60).default([]),
 });
